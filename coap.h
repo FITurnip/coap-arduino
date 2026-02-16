@@ -54,10 +54,10 @@ class Coap {
     int bufferSize;
 
     uint8_t *transmittedMessage = NULL;
-    void insertArrayToBuffer(uint8_t &iBuffer, uint8_t *entry, uint8_t entryLen);
-    void setBuffer(CoapMessage &message);
+    void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
+    uint16_t setBuffer(CoapMessage &message);
     static bool isAckMessage(const uint8_t* data, int len, uint16_t matchMsgId);
-    void transmitUdpPacket(CoapMessage &msg, const char *ip, int port);
+    void transmitUdpPacket(CoapMessage &msg, uint16_t bufferLen, const char *ip, int port);
 
     CoapMessageQueue receivedMessageQueue;
     void parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen);

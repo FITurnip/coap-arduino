@@ -8,7 +8,7 @@ CoapMessageQueue::CoapMessageQueue(uint8_t qSize) {
     count = 0;
 
     queue = (uint8_t**) malloc(queueSize * sizeof(uint8_t*));
-    elementLengths = (int*) malloc(queueSize * sizeof(uint8_t));
+    elementLengths = (int*) malloc(queueSize * sizeof(int));
 
     for (uint8_t i = 0; i < queueSize; i++) {
         queue[i] = nullptr;
@@ -47,8 +47,14 @@ bool CoapMessageQueue::enqueue(uint8_t *data, int len) {
 bool CoapMessageQueue::dequeue(uint8_t *data, int &len) {
     if (isEmpty()) return false;
 
-    len = elementLengths[tail];
-    memcpy(data, queue[tail], len);
+    int actualLen = elementLengths[tail];
+
+    if (actualLen > len) {
+        return false;
+    }
+
+    memcpy(data, queue[tail], actualLen);
+    len = actualLen;
     free(queue[tail]);
     queue[tail] = nullptr;
     elementLengths[tail] = 0;
