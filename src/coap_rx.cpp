@@ -1,6 +1,6 @@
 #include "coap.h"
-Coap::Coap(UDP &udp, int port, int bufferSize)
-    : _udp(&udp), _port(port), bufferSize(bufferSize), messageQueue(COAP_MSG_QUEUE_SIZE)
+CoapRx::CoapRx(UDP &udp, int port, int bufferSize)
+    : CoapBase(udp, port, bufferSize), messageQueue(COAP_MSG_QUEUE_SIZE)
 {
 }
 

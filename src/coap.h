@@ -79,7 +79,7 @@ class CoapRx: public CoapBase {
     CoapUri uri;
 
   public:
-    CoapBase(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
+    CoapRx(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
     bool receiveMessage();
     void parseReceived(CoapMessage &msg);
     void handleBulkMessage();
