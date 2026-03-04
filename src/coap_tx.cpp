@@ -84,7 +84,7 @@ void Coap::transmitUdpPacket(CoapMessage &coapMessage, uint16_t bufferLen, const
   for (uint16_t i = 0; i < bufferLen; i++) {
     if (transmittedMessage[i] < 0x10) Serial.print("0");
     Serial.print(transmittedMessage[i], HEX);
-    Serial.print(" ");
+    Serial.print((i + 1 % 8 == 0) ? "\n": " ");
   }
   Serial.println();
 }
