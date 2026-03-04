@@ -119,7 +119,7 @@ void Coap::setMessage() {
 }
 
 void Coap::transmitMessage(const char *ip, int port) {
-  uint16_t bufferLen = this->setBuffer(coapMessage);
+  uint16_t bufferLen = this->setBuffer();
   this->transmitUdpPacket(coapMessage, bufferLen, ip, port);
   /*if(coapMessage.type == 0x00) {
     bool isReceivedAck = false;
