@@ -15,7 +15,7 @@ void Coap::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen)
   // --- Token ---
   if (msg.tokenLen > 0) {
     //msg.token = (uint8_t*) malloc(msg.tokenLen);
-    memcpy(msg.token, &buffer[iBuffer], ceil(msg.tokenLen/2));
+    memcpy(msg.token, &buffer[iBuffer], msg.tokenLen);
   }
 
   // --- Options (skip) ---
