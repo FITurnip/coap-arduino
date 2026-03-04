@@ -1,4 +1,9 @@
 #include "coap.h"
+Coap::Coap(UDP &udp, int port, int bufferSize)
+    : _udp(&udp), _port(port), bufferSize(bufferSize), messageQueue(COAP_MSG_QUEUE_SIZE)
+{
+}
+
 void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
   // --- Header ---
   msg.coapVersion   = buffer[0] >> 6;
@@ -55,14 +60,14 @@ bool CoapRx::receiveMessage() {
 
   uint8_t buffer[bufferSize];
   this->_udp->read(buffer, bufferSize);
-  receivedMessageQueue.enqueue(buffer, bufferSize);
+  messageQueue.enqueue(buffer, bufferSize);
   return true;
 }
 
 void CoapRx::handleBulkMessage() {
-  while(!this->receivedMessageQueue.isEmpty()) {
+  while(!this->messageQueue.isEmpty()) {
     int actualBufferSize = _maxBufferSize; // temp
-    this->receivedMessageQueue.dequeue(buffer, actualBufferSize);
+    this->messageQueue.dequeue(buffer, actualBufferSize);
 
     CoapMessage msg;
     this->parseReceived(msg, buffer, actualBufferSize);

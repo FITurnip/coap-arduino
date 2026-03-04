@@ -74,12 +74,12 @@ class CoapTx: public CoapBase {
 
 class CoapRx: public CoapBase {
   private:
-    CoapMessageQueue receivedMessageQueue;
+    CoapMessageQueue messageQueue;
     void parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen);
     CoapUri uri;
 
   public:
-    using CoapBase::CoapBase;
+    CoapBase(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
     bool receiveMessage();
     void parseReceived(CoapMessage &msg);
     void handleBulkMessage();
