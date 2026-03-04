@@ -53,7 +53,6 @@ class Coap {
     int _port;
     
     int bufferSize;
-    int maxTokenLen;
     uint8_t *transmittedMessage = NULL;
     CoapMessage coapMessage;
     void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
@@ -69,7 +68,7 @@ class Coap {
     Coap(UDP &udp, int port = DEFAULT_COAP_PORT, int bufferSize = DEFAULT_BUFFER_SIZE);
     ~Coap();
     void beginUdp();
-    void initMessage(uint8_t maxTokenLen = 8);
+    void initMessage(uint8_t tokenLen = 8);
 
     void setMessage();
     void transmitMessage(const char *ip, int port = DEFAULT_COAP_PORT);

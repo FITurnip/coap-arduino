@@ -89,9 +89,8 @@ void Coap::transmitUdpPacket(CoapMessage &coapMessage, uint16_t bufferLen, const
   Serial.println();
 }
 
-void Coap::initMessage(uint8_t maxTokenLen) {
-  this->maxTokenLen = maxTokenLen;
-  if(maxTokenLen > 8) {
+void Coap::initMessage(uint8_t tokenLen) {
+  if(tokenLen > 8) {
     return;
   }
   coapMessage.coapVersion = 1;
@@ -100,6 +99,7 @@ void Coap::initMessage(uint8_t maxTokenLen) {
   coapMessage.code = 0;
   coapMessage.messageId = random(0, 65536);
   coapMessage.payloadLen = 0;
+  coapMessage.tokenLen = tokenLen;
 }
 
 void Coap::setMessage() {
@@ -107,12 +107,7 @@ void Coap::setMessage() {
   if(maxTokenLen > 8) {
     return;
   }
-  coapMessage.tokenLen = random(0, this->maxTokenLen);
-  
   for(uint8_t i = 0; i < coapMessage.tokenLen; i++) coapMessage.token[i] = random(0, 256);
-  if(coapMessage.tokenLen % 2 == 1) {
-    coapMessage.token[coapMessage.tokenLen - 1] &= 0x07; // LSB
-  }
 
   // wrap messageId
   coapMessage.messageId++;
