@@ -1,0 +1,12 @@
+{
+  "name": "Coap",
+  "version": "0.0.0",
+  "description": "Library CoAP",
+  "keywords": "coap, iot, networking",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FITurnip/coap-arduino.git"
+  },
+  "frameworks": "arduino",
+  "platforms": "*"
+}
