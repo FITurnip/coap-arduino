@@ -40,7 +40,7 @@ void Coap::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen)
   Serial.printf("Type\t:\t%d\n", msg.type);
   Serial.printf("Code\t:\t%d\n", msg.code);
   Serial.printf("Msg Id\t:\t%d\n", msg.messageId);
-  Serial.printf("Token len\t:\t%d\n", msg.tokenLen);
+  Serial.printf("TKL\t:\t%d\n", msg.tokenLen);
   if(msg.tokenLen > 0) {
     Serial.print("Token\t:\t");
     for(uint8_t i = 0; i < msg.tokenLen; i++) Serial.printf("%02X ", (unsigned int)msg.token[i]);
