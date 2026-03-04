@@ -1,6 +1,5 @@
 #include "coap.h"
-void Coap::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen)
-{
+void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
   // --- Header ---
   msg.coapVersion   = buffer[0] >> 6;
   msg.type          = (buffer[0] >> 4) & 0x03;
@@ -19,24 +18,24 @@ void Coap::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen)
   }
 
   // --- Options (skip) ---
-  /*while (iBuffer < bufferLen && buffer[iBuffer] != 0xFF) {
+  while (iBuffer < bufferLen && buffer[iBuffer] != 0xFF) {
     uint8_t opt     = buffer[iBuffer];
     uint8_t optLen  = opt & 0x0F;
     iBuffer         += 1 + optLen;
-  }*/
+  }
 
   // --- Payload ---
-  /*if (iBuffer < bufferLen && buffer[iBuffer] == 0xFF) {
+  if (iBuffer < bufferLen && buffer[iBuffer] == 0xFF) {
     iBuffer++;
     msg.payload     = &buffer[iBuffer];
     msg.payloadLen  = bufferLen - iBuffer;
   } else {
     msg.payload     = nullptr;
     msg.payloadLen  = 0;
-  }*/
+  }
 
   Serial.println("-------------------------------");
-  Serial.printf("Vers\t:\t%d\n", msg.coapVersion);
+  Serial.printf("Ver\t:\t%d\n", msg.coapVersion);
   Serial.printf("Type\t:\t%d\n", msg.type);
   Serial.printf("TKL\t:\t%d\n", msg.tokenLen);
   Serial.printf("Code\t:\t%d\n", msg.code);
@@ -50,36 +49,23 @@ void Coap::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen)
 }
 
 
-bool Coap::receiveMessage(PacketFilter filter, uint16_t matchMsgId) {
-  int packetLen = this->_udp->parsePacket();
-  if (packetLen == 0) return false;
+bool CoapRx::receiveMessage() {
+  uint16_t bufferSize = this->_udp->parsePacket();
+  if (bufferSize < 4) return false; // header only
 
-  uint8_t buffer[DEFAULT_BUFFER_SIZE];
-  int len = this->_udp->read(buffer, sizeof(buffer));
-  if (len < 4) return false;
-
-  if (filter && !filter(buffer, len, matchMsgId)) return false;
-
-  receivedMessageQueue.enqueue(buffer, len);
+  uint8_t buffer[bufferSize];
+  this->_udp->read(buffer, bufferSize);
+  receivedMessageQueue.enqueue(buffer, bufferSize);
   return true;
 }
 
-bool Coap::isAckMessage(const uint8_t* data, int len, uint16_t matchMsgId) {
-    uint8_t type    = (data[0] >> 4) & 0x03;
-    uint16_t msgId  = (data[2] << 8) | data[3];
-
-    return (type == 2) && (msgId == matchMsgId);
-}
-
-void Coap::handleBulkMessage() {
+void CoapRx::handleBulkMessage() {
   while(!this->receivedMessageQueue.isEmpty()) {
-    uint8_t buffer[DEFAULT_BUFFER_SIZE];
-    int bufferLen = DEFAULT_BUFFER_SIZE;
-    this->receivedMessageQueue.dequeue(buffer, bufferLen);
+    int actualBufferSize = _maxBufferSize; // temp
+    this->receivedMessageQueue.dequeue(buffer, actualBufferSize);
 
-    // handle
     CoapMessage msg;
-    this->parseReceived(msg, buffer, bufferLen);
+    this->parseReceived(msg, buffer, actualBufferSize);
     //this->uri.handle("", msg);
     delay(100);
   }

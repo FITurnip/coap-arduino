@@ -1,14 +1,11 @@
 #include "coap.h"
 
-Coap::Coap(UDP &udp, int port, int bufferSize)
-    : _udp(&udp), _port(port), bufferSize(bufferSize), receivedMessageQueue(COAP_MSG_QUEUE_SIZE)
-{
-  transmittedMessage = (uint8_t*) malloc(bufferSize);
+CoapBase::CoapBase(UDP &udp, int port, int maxBufferSize) : _udp(&udp), _port(port), _maxBufferSize(maxBufferSize) {
+  buffer = (uint8_t*) malloc(this->_maxBufferSize);
 }
 
-Coap::~Coap() { }
 
-void Coap::beginUdp() {
+void CoapBase::beginConnection() {
     this->_udp->begin(this->_port);
 }
 

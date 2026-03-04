@@ -46,36 +46,42 @@ class CoapUri {
     void handle(String uri, CoapMessage &msg);
 };
 
-typedef bool (*PacketFilter)(const uint8_t* data, int len, uint16_t matchMsgId);
-class Coap {
-  private:
+class CoapBase {
+  protected:
     UDP *_udp;
     int _port;
+    uint8_t *buffer = NULL; 
+    int _maxBufferSize;
     
-    int bufferSize;
-    uint8_t *transmittedMessage = NULL;
-    CoapMessage coapMessage;
-    void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
-    uint16_t setBuffer();
-    static bool isAckMessage(const uint8_t* data, int len, uint16_t matchMsgId);
-    void transmitUdpPacket(CoapMessage &msg, uint16_t bufferLen, const char *ip, int port);
+  public:
+    CoapBase(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
+    void beginConnection();
+};
 
+class CoapTx: public CoapBase {
+  private:
+    CoapMessage message;
+    uint16_t setBuffer();
+    void transmitPacket(const char *ip, int port, uint16_t actualBufferSize);
+    void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
+
+  public:
+    using CoapBase::CoapBase;
+    void initMessage(uint8_t tokenLen);
+    void setMessage();
+    void transmitMessage(const char *ip, int port = DEFAULT_COAP_PORT);
+};
+
+class CoapRx: public CoapBase {
+  private:
     CoapMessageQueue receivedMessageQueue;
     void parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen);
     CoapUri uri;
 
   public:
-    Coap(UDP &udp, int port = DEFAULT_COAP_PORT, int bufferSize = DEFAULT_BUFFER_SIZE);
-    ~Coap();
-    void beginUdp();
-    void initMessage(uint8_t tokenLen = 8);
-
-    void setMessage();
-    void transmitMessage(const char *ip, int port = DEFAULT_COAP_PORT);
-
-    bool receiveMessage(PacketFilter filter = nullptr, uint16_t matchMsgId = 0);
+    using CoapBase::CoapBase;
+    bool receiveMessage();
     void parseReceived(CoapMessage &msg);
     void handleBulkMessage();
 };
-
 #endif
