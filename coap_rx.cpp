@@ -14,31 +14,38 @@ void Coap::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen)
 
   // --- Token ---
   if (msg.tokenLen > 0) {
+    msg.token = (uint8_t*) malloc(msg.tokenLen);
     memcpy(msg.token, &buffer[iBuffer], msg.tokenLen);
-    iBuffer += msg.tokenLen;
   }
 
   // --- Options (skip) ---
-  while (iBuffer < bufferLen && buffer[iBuffer] != 0xFF) {
+  /*while (iBuffer < bufferLen && buffer[iBuffer] != 0xFF) {
     uint8_t opt     = buffer[iBuffer];
     uint8_t optLen  = opt & 0x0F;
     iBuffer         += 1 + optLen;
-  }
+  }*/
 
   // --- Payload ---
-  if (iBuffer < bufferLen && buffer[iBuffer] == 0xFF) {
+  /*if (iBuffer < bufferLen && buffer[iBuffer] == 0xFF) {
     iBuffer++;
     msg.payload     = &buffer[iBuffer];
     msg.payloadLen  = bufferLen - iBuffer;
   } else {
     msg.payload     = nullptr;
     msg.payloadLen  = 0;
-  }
+  }*/
 
-  Serial.printf("version\t:\t%d\n", msg.coapVersion);
-  Serial.printf("type\t:\t%d\n", msg.type);
-  Serial.printf("code\t:\t%d\n", msg.code);
-  Serial.printf("msg Id\t:\t%d\n", msg.messageId);
+  Serial.println("-------------------------------");
+  Serial.printf("Version\t:\t%d\n", msg.coapVersion);
+  Serial.printf("Type\t:\t%d\n", msg.type);
+  Serial.printf("Code\t:\t%d\n", msg.code);
+  Serial.printf("Msg Id\t:\t%d\n", msg.messageId);
+  if(msg.tokenLen > 0) {
+    Serial.print("Token\t:\t");
+    for(uint8_t i = 0; i < msg.tokenLen; i++) Serial.printf("%d ", msg.token[i]);
+    Serial.print("\n");
+  }
+  Serial.println("-------------------------------");
 }
 
 
@@ -65,7 +72,6 @@ bool Coap::isAckMessage(const uint8_t* data, int len, uint16_t matchMsgId) {
 
 void Coap::handleBulkMessage() {
   while(!this->receivedMessageQueue.isEmpty()) {
-    //Serial.println("di sini!");
     uint8_t buffer[DEFAULT_BUFFER_SIZE];
     int bufferLen = DEFAULT_BUFFER_SIZE;
     this->receivedMessageQueue.dequeue(buffer, bufferLen);
@@ -73,6 +79,7 @@ void Coap::handleBulkMessage() {
     // handle
     CoapMessage msg;
     this->parseReceived(msg, buffer, bufferLen);
-    this->uri.handle("", msg);
+    //this->uri.handle("", msg);
+    delay(100);
   }
 }
