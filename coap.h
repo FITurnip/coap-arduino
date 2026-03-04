@@ -51,13 +51,13 @@ class Coap {
   private:
     UDP *_udp;
     int _port;
+    
     int bufferSize;
     int maxTokenLen;
-
     uint8_t *transmittedMessage = NULL;
     CoapMessage coapMessage;
     void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
-    uint16_t setBuffer(CoapMessage &message);
+    uint16_t setBuffer();
     static bool isAckMessage(const uint8_t* data, int len, uint16_t matchMsgId);
     void transmitUdpPacket(CoapMessage &msg, uint16_t bufferLen, const char *ip, int port);
 

@@ -88,7 +88,7 @@ void Coap::transmitUdpPacket(CoapMessage &coapMessage, uint16_t bufferLen, const
   }
   Serial.println();
 }
-test
+
 void Coap::initMessage(uint8_t maxTokenLen) {
   this->maxTokenLen = maxTokenLen;
   if(maxTokenLen > 8) {
