@@ -34,6 +34,11 @@ void Coap::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen)
     msg.payload     = nullptr;
     msg.payloadLen  = 0;
   }
+
+  Serial.printf("version\t:\t%d\n", msg.coapVersion);
+  Serial.printf("type\t:\t%d\n", msg.type);
+  Serial.printf("code\t:\t%d\n", msg.code);
+  Serial.printf("msg Id\t:\t%d\n", msg.messageId);
 }
 
 
@@ -60,8 +65,9 @@ bool Coap::isAckMessage(const uint8_t* data, int len, uint16_t matchMsgId) {
 
 void Coap::handleBulkMessage() {
   while(!this->receivedMessageQueue.isEmpty()) {
+    //Serial.println("di sini!");
     uint8_t buffer[DEFAULT_BUFFER_SIZE];
-    int bufferLen = 0;
+    int bufferLen = DEFAULT_BUFFER_SIZE;
     this->receivedMessageQueue.dequeue(buffer, bufferLen);
 
     // handle

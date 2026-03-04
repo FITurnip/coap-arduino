@@ -50,7 +50,9 @@ bool CoapMessageQueue::dequeue(uint8_t *data, int &len) {
     int actualLen = elementLengths[tail];
 
     if (actualLen > len) {
-        return false;
+      Serial.println(actualLen);
+      Serial.println(len);
+      return false;
     }
 
     memcpy(data, queue[tail], actualLen);
