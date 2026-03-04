@@ -104,7 +104,7 @@ void Coap::initMessage(uint8_t tokenLen) {
 
 void Coap::setMessage() {
   // regenerate token
-  if(maxTokenLen > 8) {
+  if(coapMessage.tokenLen > 8) {
     return;
   }
   for(uint8_t i = 0; i < coapMessage.tokenLen; i++) coapMessage.token[i] = random(0, 256);
