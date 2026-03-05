@@ -48,7 +48,6 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
     }
 
     // extended length
-    Serial.printf("len: %d\n", optLen);
     if(optLen == 13) {
       if(iBuffer >= bufferLen) break;
       optLen = 13 + buffer[iBuffer++];
@@ -63,7 +62,6 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
 
     uint16_t optionNum = prevOptionNum + optDelta;
     prevOptionNum = optionNum;
-    Serial.printf("num: %d len: %d\n", optionNum, optLen);
 
     if(iBuffer + optLen > bufferLen) break;
 
