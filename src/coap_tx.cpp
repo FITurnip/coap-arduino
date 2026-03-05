@@ -44,13 +44,16 @@ uint16_t CoapTx::setBuffer() {
   this->insertArrayToBuffer(iBuffer, message.token, tokenLen);
 
   Serial.printf("optionsize: %d\n", message.optionSize);
+  uint16_t prevOptNum = 0;
   for(uint8_t iOption = 0; iOption < message.optionSize; iOption++) {
-    uint16_t deltaTemp = iOption > 0 ? message.options[iOption].num - message.options[iOption - 1].num : message.options[iOption].num;
+    uint16_t deltaTemp = message.options[iOption].num - prevOptNum;
+    prevOptNum = message.options[iOption].num;
+
     uint8_t delta[3] = {0, 0, 0},  len[3] = {0, 0, 0};
     int deltaFieldSize = this->encodeOptionField(deltaTemp, delta);
     int lenFieldSize = this->encodeOptionField(message.options[iOption].len, len);
 
-    buffer[iBuffer++] = delta[0] | len[0];
+    buffer[iBuffer++] = (delta[0] << 4) | (len[0] & 0x0F);
     for(uint8_t i = 1; i < deltaFieldSize; i++) buffer[iBuffer++] = delta[i];
     for(uint8_t i = 1; i < lenFieldSize; i++) buffer[iBuffer++] = len[i];
     this->insertArrayToBuffer(iBuffer, message.options[iOption].val, message.options[iOption].len);
@@ -76,16 +79,6 @@ void CoapTx::transmitPacket(const char *ip, int port, uint16_t actualBufferSize)
   this->_udp->write(buffer, actualBufferSize);
   this->_udp->endPacket();
   yield();
-
-  Serial.print("CoAP Packet (");
-  Serial.print(actualBufferSize);
-  Serial.println(" bytes):");
-
-  for (uint16_t i = 0; i < actualBufferSize; i++) {
-    Serial.printf("%02X", buffer[i]);
-    Serial.print(((i + 1) % 4 == 0) ? "\n": " ");
-  }
-  Serial.println();
 }
 
 void CoapTx::normalizeUriPath(char* path) {

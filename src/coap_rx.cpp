@@ -23,26 +23,57 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
   }
 
   // --- Options ---
-  while (iBuffer < bufferLen && buffer[iBuffer] != 0xFF) {
-    //Serial.printf("%02X\n", buffer[iBuffer]);
-    uint8_t optField  = buffer[iBuffer];
-    uint16_t optDelta  = buffer[iBuffer] >> 4;
-    uint16_t optLen    = buffer[iBuffer] & 0x0F;
-
-    if(optDelta == 14) optDelta = buffer[++iBuffer] | buffer[++iBuffer];
-    else if(optDelta == 13) optDelta = buffer[++iBuffer];
-    //Serial.printf("%02X\n", buffer[iBuffer]);
-
-    if(optLen == 14) optLen = buffer[++iBuffer] | buffer[++iBuffer];
-    else if(optLen == 13) optLen = buffer[++iBuffer];
-
-    //Serial.printf("%02X\n", buffer[iBuffer]);
-    msg.options[msg.optionSize].num = (msg.optionSize > 0) ? optDelta + msg.options[msg.optionSize - 1].num : optDelta;
-    msg.options[msg.optionSize].len = optLen;
-    msg.options[msg.optionSize].val = (uint8_t*) malloc(optLen);
-    for(uint16_t i = 0; i < optLen; i++) {
-      msg.options[msg.optionSize].val[i] = buffer[iBuffer++];
+  uint16_t prevOptionNum = 0;
+  while (iBuffer < bufferLen) {
+    if(buffer[iBuffer] == 0xFF) {
+      iBuffer++;
+      break;
     }
+
+    uint8_t   optField  = buffer[iBuffer++];
+    uint16_t  optDelta  = (optField >> 4) & 0x0F;
+    uint16_t  optLen    = optField & 0x0F;
+
+    // extended delta
+    if(optDelta == 13) {
+      if(iBuffer >= bufferLen) break; // safety
+      optDelta = 13 + buffer[iBuffer++];
+    } else if(optDelta == 14) {
+      if(iBuffer + 1 >= bufferLen) break;
+      optDelta = 269 + (buffer[iBuffer] << 8 | buffer[iBuffer + 1]);
+      iBuffer += 2;
+    } else if(optDelta == 15) {
+      // reserved, invalid
+      break;
+    }
+
+    // extended length
+    Serial.printf("len: %d\n", optLen);
+    if(optLen == 13) {
+      if(iBuffer >= bufferLen) break;
+      optLen = 13 + buffer[iBuffer++];
+    } else if(optLen == 14) {
+      if(iBuffer + 1 >= bufferLen) break;
+      optLen = 269 + (buffer[iBuffer] << 8 | buffer[iBuffer + 1]);
+      iBuffer += 2;
+    } else if(optLen == 15) {
+      // reserved, invalid
+      break;
+    }
+
+    uint16_t optionNum = prevOptionNum + optDelta;
+    prevOptionNum = optionNum;
+    Serial.printf("num: %d len: %d\n", optionNum, optLen);
+
+    if(iBuffer + optLen > bufferLen) break;
+
+    uint8_t* val = (uint8_t*)malloc(optLen);
+    memcpy(val, buffer + iBuffer, optLen);
+    iBuffer += optLen;
+
+    msg.options[msg.optionSize].num = optionNum;
+    msg.options[msg.optionSize].len = optLen;
+    msg.options[msg.optionSize].val = val;
     msg.optionSize++;
   }
 
