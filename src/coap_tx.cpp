@@ -234,7 +234,9 @@ void CoapTx::decomposeUrlIntoOptions(const char* destUri) {
   free(uri);
 }
 
-void CoapTx::initMessage(const char* ip, int port, uint8_t tokenLen) {
+void CoapTx::init(const char* ip, int port, uint8_t tokenLen) {
+  beginConnection();
+
   // init header
   if(tokenLen > 8) return;
   message.coapVersion = 1;
@@ -266,7 +268,9 @@ void CoapTx::transmitMessage() {
     Serial.println("no ip:port");
     return;
   }
+
   uint16_t actualBufferSize = this->setBuffer();
+  if(actualBufferSize > DEFAULT_BUFFER_SIZE) return;
   message.diagnostic();
   this->transmitPacket(dstIp, dstPort, actualBufferSize);
 }

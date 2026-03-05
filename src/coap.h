@@ -5,7 +5,7 @@
 #include "coap_queue.h"
 
 #define DEFAULT_COAP_PORT 5683
-#define DEFAULT_BUFFER_SIZE 256
+#define DEFAULT_BUFFER_SIZE 1152
 #define COAP_MSG_QUEUE_SIZE 8
 #define MAX_URI           4
 
@@ -109,7 +109,7 @@ class CoapTx: public CoapBase {
     void normalizeUriPath(char* path);
   public:
     using CoapBase::CoapBase;
-    void initMessage(const char *ip, int port, uint8_t tokenLen);
+    void init(const char *ip, int port, uint8_t tokenLen);
     void setMessage(const char *uri);
 
     void transmitMessage();

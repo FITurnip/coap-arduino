@@ -77,8 +77,7 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
 
   // --- Payload ---
   if (iBuffer < bufferLen && buffer[iBuffer] == 0xFF) {
-    iBuffer++;
-    msg.payload     = &buffer[iBuffer];
+    msg.payload     = &buffer[iBuffer++];
     msg.payloadLen  = bufferLen - iBuffer;
   } else {
     msg.payload     = nullptr;
@@ -101,6 +100,8 @@ void CoapRx::handleBulkMessage() {
   while(!this->messageQueue.isEmpty()) {
     int actualBufferSize = _maxBufferSize; // temp
     this->messageQueue.dequeue(buffer, actualBufferSize);
+
+    if(actualBufferSize > DEFAULT_BUFFER_SIZE) return;
 
     CoapMessage msg;
     this->parseReceived(msg, buffer, actualBufferSize);
