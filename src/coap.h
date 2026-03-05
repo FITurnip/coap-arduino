@@ -53,6 +53,9 @@ typedef struct {
 } CoapOpt;
 
 class CoapMessage {
+  private:
+    const char* getCoapCodeName(uint8_t cls, uint8_t detail);
+
   public:
     uint8_t  coapVersion;
     uint8_t  type;
@@ -66,6 +69,7 @@ class CoapMessage {
     uint8_t  payloadLen;
    
     void addOption(uint16_t num, uint16_t len, uint8_t *val);
+    void diagnostic();
 };
 
 class CoapUri {
@@ -113,6 +117,7 @@ class CoapRx: public CoapBase {
 
   public:
     CoapRx(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
+
     bool receiveMessage();
     void parseReceived(CoapMessage &msg);
     void handleBulkMessage();

@@ -18,8 +18,8 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
 
   // --- Token ---
   if (msg.tokenLen > 0) {
-    //msg.token = (uint8_t*) malloc(msg.tokenLen);
     memcpy(msg.token, &buffer[iBuffer], msg.tokenLen);
+    iBuffer += msg.tokenLen;
   }
 
   // --- Options (skip) ---
@@ -51,20 +51,6 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
     msg.payload     = nullptr;
     msg.payloadLen  = 0;
   }
-
-  Serial.println("-------------------------------");
-  String msgType[4] = {"CON", "NON", "ACK", "RST"};
-  Serial.printf("CoAP %d.0\n", msg.coapVersion);
-  Serial.printf("%s [0x%X]\n", msgType[msg.type], msg.messageId);
-  Serial.printf("Type\t:\t%d\n", msg.type);
-  Serial.printf("TKL\t:\t%d\n", msg.tokenLen);
-  Serial.printf("Code\t:\t%d\n", msg.code);
-  if(msg.tokenLen > 0) {
-    Serial.print("Token\t:\t");
-    for(uint8_t i = 0; i < msg.tokenLen; i++) Serial.printf("%02X ", (unsigned int)msg.token[i]);
-    Serial.print("\n");
-  }
-  Serial.println("-------------------------------");
 }
 
 
@@ -85,6 +71,7 @@ void CoapRx::handleBulkMessage() {
 
     CoapMessage msg;
     this->parseReceived(msg, buffer, actualBufferSize);
+    msg.diagnostic();
     //this->uri.handle("", msg);
   }
 }
