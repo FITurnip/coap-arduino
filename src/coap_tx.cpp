@@ -6,6 +6,24 @@ void CoapTx::insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t ent
   }
 }
 
+uint8_t CoapTx::encodeOptionField(uint16_t value, uint8_t out[3]) {
+  if (value < 13) {
+    out[0] = value;
+    return 1;
+  } 
+  if (value < 269) {
+    out[0] = 13;
+    out[1] = value - 13;
+    return 2;
+  }
+
+  out[0] = 14;
+  value -= 269;
+  out[1] = (value >> 8) & 0xFF;
+  out[2] = value & 0xFF;
+  return 3;
+}
+
 uint16_t CoapTx::setBuffer() {
   if (this->_maxBufferSize < 4) return 0;
 
@@ -25,9 +43,22 @@ uint16_t CoapTx::setBuffer() {
 
   this->insertArrayToBuffer(iBuffer, message.token, tokenLen);
 
+  for(uint8_t iOption = 1; iOption < message.optionSize; iOption++) {
+    uint16_t deltaTemp = message.options[iOption].num - message.options[iOption - 1].num;
+    uint8_t delta[3] = {0, 0, 0},  len[3] = {0, 0, 0};
+    int deltaFieldSize = this->encodeOptionField(deltaTemp, delta);
+    int lenFieldSize = this->encodeOptionField(message.options[iOption].len, len);
+
+    buffer[iBuffer++] = delta[0] | len[0];
+    for(uint8_t i = 1; i < deltaFieldSize; i++) buffer[iBuffer++] = delta[i];
+    for(uint8_t i = 1; i < lenFieldSize; i++) buffer[iBuffer++] = len[i];
+    this->insertArrayToBuffer(iBuffer, message.options[iOption].val, message.options[iOption].len);
+  }
+
+  buffer[iBuffer++] = 0xFF;
+
   if (message.payloadLen > 0) {
     if (iBuffer + 1 >= this->_maxBufferSize) return 0;
-    buffer[iBuffer++] = 0xFF;
     this->insertArrayToBuffer(iBuffer, message.payload, message.payloadLen);
   }
 

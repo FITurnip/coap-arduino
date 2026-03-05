@@ -9,6 +9,12 @@ void CoapBase::beginConnection() {
     this->_udp->begin(this->_port);
 }
 
+void CoapMessage::addOption(uint16_t num, uint16_t len, uint8_t *val) {
+  options[optionSize].num = num;
+  options[optionSize].len = len;
+  options[optionSize].val = val;
+}
+
 void CoapUri::add(String uri, void (*callback)(CoapMessage &msg)) {
   if(this->counter < MAX_URI) return;
   this->uri[counter] = uri;

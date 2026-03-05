@@ -24,17 +24,49 @@
 #define EXCHANGE_LIFETIME 247000
 #define NON_LIFETIME      145000
 
+enum class CoapOptNum : uint16_t {
+    IF_MATCH       = 1,
+    URI_HOST       = 3,
+    ETAG           = 4,
+    IF_NONE_MATCH  = 5,
+    OBSERVE        = 6,    // RFC 7641
+    URI_PORT       = 7,
+    LOCATION_PATH  = 8,
+    URI_PATH       = 11,
+    CONTENT_FORMAT = 12,
+    MAX_AGE        = 14,
+    URI_QUERY      = 15,
+    ACCEPT         = 17,
+    LOCATION_QUERY = 20,
+    BLOCK2         = 23,   // RFC 7959
+    BLOCK1         = 27,   // RFC 7959
+    SIZE2          = 28,   // RFC 7959
+    PROXY_URI      = 35,
+    PROXY_SCHEME   = 39,
+    SIZE1          = 60
+};
+
 typedef struct {
-  uint8_t  coapVersion;
-  uint8_t  type;
-  uint8_t  tokenLen;
-  uint8_t  code;
-  uint16_t messageId;
-  uint8_t token[8];
-  uint8_t *options;
-  uint8_t *payload;
-  uint8_t  payloadLen;
-} CoapMessage;
+    uint16_t num;
+    uint16_t len;
+    uint8_t *val;
+} CoapOpt;
+
+class CoapMessage {
+  public:
+    uint8_t  coapVersion;
+    uint8_t  type;
+    uint8_t  tokenLen;
+    uint8_t  code;
+    uint16_t messageId;
+    uint8_t token[8];
+    CoapOpt options[8];
+    uint8_t optionSize = 0;
+    uint8_t *payload;
+    uint8_t  payloadLen;
+   
+    void addOption(uint16_t num, uint16_t len, uint8_t *val);
+};
 
 class CoapUri {
   private:
@@ -64,11 +96,12 @@ class CoapTx: public CoapBase {
     uint16_t setBuffer();
     void transmitPacket(const char *ip, int port, uint16_t actualBufferSize);
     void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
-
+    uint8_t encodeOptionField(uint16_t value, uint8_t out[3]);
   public:
     using CoapBase::CoapBase;
     void initMessage(uint8_t tokenLen);
     void setMessage();
+
     void transmitMessage(const char *ip, int port = DEFAULT_COAP_PORT);
 };
 

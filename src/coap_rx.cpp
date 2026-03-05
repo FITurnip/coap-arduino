@@ -24,9 +24,22 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
 
   // --- Options (skip) ---
   while (iBuffer < bufferLen && buffer[iBuffer] != 0xFF) {
-    uint8_t opt     = buffer[iBuffer];
-    uint8_t optLen  = opt & 0x0F;
-    iBuffer         += 1 + optLen;
+    uint8_t optField  = buffer[iBuffer];
+    uint16_t optDelta  = buffer[iBuffer] >> 4;
+    uint16_t optLen    = buffer[iBuffer] & 0x0F;
+
+    if(optDelta == 14) optDelta = buffer[++iBuffer] | buffer[++iBuffer];
+    else if(optDelta == 13) optDelta = buffer[++iBuffer];
+
+    if(optLen == 14) optLen = buffer[++iBuffer] | buffer[++iBuffer];
+    else if(optLen == 13) optLen = buffer[++iBuffer];
+
+    msg.options[msg.optionSize].num = (msg.optionSize > 0) ? optDelta + msg.options[msg.optionSize - 1].num : optDelta;
+    msg.options[msg.optionSize].len = optLen;
+    msg.options[msg.optionSize++].val = (uint8_t*) malloc(optLen);
+    for(uint16_t i = 0; i < optLen; i++) {
+      msg.options[msg.optionSize].val[i] = buffer[iBuffer++];
+    }
   }
 
   // --- Payload ---
@@ -40,11 +53,12 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
   }
 
   Serial.println("-------------------------------");
-  Serial.printf("Ver\t:\t%d\n", msg.coapVersion);
+  String msgType[4] = {"CON", "NON", "ACK", "RST"};
+  Serial.printf("CoAP %d.0\n", msg.coapVersion);
+  Serial.printf("%s [0x%X]\n", msgType[msg.type], msg.messageId);
   Serial.printf("Type\t:\t%d\n", msg.type);
   Serial.printf("TKL\t:\t%d\n", msg.tokenLen);
   Serial.printf("Code\t:\t%d\n", msg.code);
-  Serial.printf("Msg Id\t:\t%d\n", msg.messageId);
   if(msg.tokenLen > 0) {
     Serial.print("Token\t:\t");
     for(uint8_t i = 0; i < msg.tokenLen; i++) Serial.printf("%02X ", (unsigned int)msg.token[i]);
@@ -72,6 +86,5 @@ void CoapRx::handleBulkMessage() {
     CoapMessage msg;
     this->parseReceived(msg, buffer, actualBufferSize);
     //this->uri.handle("", msg);
-    delay(100);
   }
 }
