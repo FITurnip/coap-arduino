@@ -22,7 +22,7 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
     iBuffer += msg.tokenLen;
   }
 
-  // --- Options (skip) ---
+  // --- Options ---
   while (iBuffer < bufferLen && buffer[iBuffer] != 0xFF) {
     //Serial.printf("%02X\n", buffer[iBuffer]);
     uint8_t optField  = buffer[iBuffer];

@@ -46,6 +46,71 @@ void CoapMessage::addOption(uint16_t num, uint16_t len, uint8_t *val) {
   options[optionSize].num = num;
   options[optionSize].len = len;
   options[optionSize].val = val;
+  optionSize++;
+}
+
+const char* optionName(uint16_t num) {
+    switch(num) {
+        case 1: return "If-Match";
+        case 3: return "Uri-Host";
+        case 4: return "ETag";
+        case 5: return "If-None-Match";
+        case 7: return "Uri-Port";
+        case 11: return "Uri-Path";
+        case 12: return "Content-Format";
+        case 15: return "Uri-Query";
+        case 17: return "Accept";
+        case 35: return "Proxy-Uri";
+        case 39: return "Proxy-Scheme";
+        case 60: return "Size1";
+        default: return "Unknown";
+    }
+}
+const char* getOptionName(uint16_t num) {
+    switch(num) {
+        case 1: return "If-Match";
+        case 3: return "Uri-Host";
+        case 4: return "ETag";
+        case 5: return "If-None-Match";
+        case 7: return "Uri-Port";
+        case 11: return "Uri-Path";
+        case 12: return "Content-Format";
+        case 15: return "Uri-Query";
+        case 17: return "Accept";
+        case 35: return "Proxy-Uri";
+        case 39: return "Proxy-Scheme";
+        case 60: return "Size1";
+        default: return "Unknown";
+    }
+}
+
+void printOption(const CoapOpt &opt) {
+  const char* name = getOptionName(opt.num);
+
+  Serial.printf("%s\t: ", name); // fixed width 13 chars
+  switch(opt.num) {
+    case 3: // Uri-Host
+    case 11: // Uri-Path
+    case 15: // Uri-Query
+    case 35: // Proxy-Uri
+    case 39: // Proxy-Scheme
+      for(uint16_t i=0;i<opt.len;i++)
+        Serial.printf("%c", opt.val[i]);
+      break;
+    case 7: // Uri-Port
+    case 12: // Content-Format
+    case 17: // Accept:
+    case 60: // Size1
+      if(opt.len == 2)
+        Serial.printf("%u", *((uint16_t*)opt.val));
+      else if(opt.len == 4)
+        Serial.printf("%u", *((uint32_t*)opt.val));
+      break;
+    default: // biner/opaque
+      for(uint16_t i=0;i<opt.len;i++)
+        Serial.printf("%02X ", opt.val[i]);
+  }
+  Serial.println();
 }
 
 void CoapMessage::diagnostic() {
@@ -56,11 +121,16 @@ void CoapMessage::diagnostic() {
   uint8_t clsCode = code >> 5, detailCode = code & 0x1F;
 
   Serial.printf("CoAP %s\n", clsCode == 0 ? "REQUEST" : "RESPONSE");
-  Serial.printf("Ver\t: %d.0\n", coapVersion);
-  Serial.printf("Type\t: %s\n", msgType[type]);
-  Serial.printf("Method\t: %d.%02d %s\n", clsCode, detailCode, this->getCoapCodeName(clsCode, detailCode));
-  Serial.printf("MID\t: 0x%X\n", messageId);
-  Serial.printf("Token\t: 0x%X\n", token32);
+  Serial.printf("Ver\t\t: %d.0\n", coapVersion);
+  Serial.printf("Type\t\t: %s\n", msgType[type]);
+  Serial.printf("Method\t\t: %d.%02d %s\n", clsCode, detailCode, this->getCoapCodeName(clsCode, detailCode));
+  Serial.printf("MID\t\t: 0x%X\n", messageId);
+  Serial.printf("Token\t\t: 0x%X\n", token32);
+
+
+  for(uint8_t i = 0; i < optionSize; i++) {
+    printOption(options[i]);
+  }
   Serial.print("\n");
 }
 

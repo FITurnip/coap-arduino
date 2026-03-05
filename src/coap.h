@@ -63,7 +63,7 @@ class CoapMessage {
     uint8_t  code;
     uint16_t messageId;
     uint8_t token[8];
-    CoapOpt options[8];
+    CoapOpt options[32];
     uint8_t optionSize = 0;
     uint8_t *payload;
     uint8_t  payloadLen;
@@ -97,16 +97,22 @@ class CoapBase {
 class CoapTx: public CoapBase {
   private:
     CoapMessage message;
+    char* dstIp = NULL;
+    int dstPort;
+
     uint16_t setBuffer();
     void transmitPacket(const char *ip, int port, uint16_t actualBufferSize);
     void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
     uint8_t encodeOptionField(uint16_t value, uint8_t out[3]);
+    void setDstAddress(const char* ip, int port);
+    void decomposeUrlIntoOptions(const char* destUri);
+    void normalizeUriPath(char* path);
   public:
     using CoapBase::CoapBase;
-    void initMessage(uint8_t tokenLen);
-    void setMessage();
+    void initMessage(const char *ip, int port, uint8_t tokenLen);
+    void setMessage(const char *uri);
 
-    void transmitMessage(const char *ip, int port = DEFAULT_COAP_PORT);
+    void transmitMessage();
 };
 
 class CoapRx: public CoapBase {
