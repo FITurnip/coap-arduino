@@ -24,7 +24,7 @@
 #define EXCHANGE_LIFETIME 247000
 #define NON_LIFETIME      145000
 
-enum class CoapOptNum : uint16_t {
+enum CoapOptNum : uint16_t {
     IF_MATCH       = 1,
     URI_HOST       = 3,
     ETAG           = 4,
@@ -72,14 +72,28 @@ class CoapMessage {
     void diagnostic();
 };
 
-class CoapUri {
-  private:
-    String uri[MAX_URI];
-    void (*handler[MAX_URI])(CoapMessage &msg);
-    int counter = 0;
-  public:
-    void add(String uri, void (*callback)(CoapMessage &msg));
-    void handle(String uri, CoapMessage &msg);
+enum CoapMethod : uint8_t {
+    COAP_GET    = 1,
+    COAP_POST   = 2,
+    COAP_PUT    = 3,
+    COAP_DELETE = 4
+};
+
+typedef void (*CoapHandler)(CoapMessage &request, CoapMessage &response);
+class CoapResource {
+public:
+    CoapResource(const char* p = nullptr);
+    void addHandler(const char* path, uint8_t method, CoapHandler handler);
+    void handleRequest(const char* path, uint8_t method, CoapMessage& req, CoapMessage& res);
+
+private:
+    char* path;
+    CoapHandler handlers[5];
+    CoapResource* children[10];
+    uint8_t childCount;
+
+    CoapResource* findOrCreateChild(const char* name);
+    CoapResource* findChild(const char* name);
 };
 
 class CoapBase {
@@ -119,13 +133,14 @@ class CoapRx: public CoapBase {
   private:
     CoapMessageQueue messageQueue;
     void parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen);
-    CoapUri uri;
+    CoapResource resource;
 
   public:
     CoapRx(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
-
     bool receiveMessage();
     void parseReceived(CoapMessage &msg);
     void handleBulkMessage();
+
+    void addHandler(const char* path, uint8_t method, CoapHandler handler);
 };
 #endif
