@@ -242,7 +242,7 @@ void CoapTx::init(const char* ip, int port, uint8_t tokenLen) {
   message.coapVersion = 1;
   message.type = 0;
   
-  message.code = 0;
+  message.code = 0x01;
   message.messageId = random(0, 65536);
   message.payloadLen = 0;
   message.tokenLen = tokenLen;
