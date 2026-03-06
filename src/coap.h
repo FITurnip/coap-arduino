@@ -2,12 +2,10 @@
 #define __COAP_H__
 #include "Udp.h"
 #include <Arduino.h>
-#include "coap_queue.h"
+#include "../lib/CircularQueue/circular_queue.h"
 
 #define DEFAULT_COAP_PORT 5683
 #define DEFAULT_BUFFER_SIZE 1152
-#define COAP_MSG_QUEUE_SIZE 8
-#define MAX_URI           4
 
 #define ACK_TIMEOUT       2000
 #define ACK_RANDOM_FACTOR 1.5
@@ -24,37 +22,38 @@
 #define EXCHANGE_LIFETIME 247000
 #define NON_LIFETIME      145000
 
-enum CoapOptNum : uint16_t {
-    IF_MATCH       = 1,
-    URI_HOST       = 3,
-    ETAG           = 4,
-    IF_NONE_MATCH  = 5,
-    OBSERVE        = 6,    // RFC 7641
-    URI_PORT       = 7,
-    LOCATION_PATH  = 8,
-    URI_PATH       = 11,
-    CONTENT_FORMAT = 12,
-    MAX_AGE        = 14,
-    URI_QUERY      = 15,
-    ACCEPT         = 17,
-    LOCATION_QUERY = 20,
-    BLOCK2         = 23,   // RFC 7959
-    BLOCK1         = 27,   // RFC 7959
-    SIZE2          = 28,   // RFC 7959
-    PROXY_URI      = 35,
-    PROXY_SCHEME   = 39,
-    SIZE1          = 60
-};
-
-typedef struct {
-    uint16_t num;
-    uint16_t len;
-    uint8_t *val;
-} CoapOpt;
-
 class CoapMessage {
   private:
+    enum CoapOptNum : uint16_t {
+      IF_MATCH       = 1,
+      URI_HOST       = 3,
+      ETAG           = 4,
+      IF_NONE_MATCH  = 5,
+      OBSERVE        = 6,    // RFC 7641
+      URI_PORT       = 7,
+      LOCATION_PATH  = 8,
+      URI_PATH       = 11,
+      CONTENT_FORMAT = 12,
+      MAX_AGE        = 14,
+      URI_QUERY      = 15,
+      ACCEPT         = 17,
+      LOCATION_QUERY = 20,
+      BLOCK2         = 23,   // RFC 7959
+      BLOCK1         = 27,   // RFC 7959
+      SIZE2          = 28,   // RFC 7959
+      PROXY_URI      = 35,
+      PROXY_SCHEME   = 39,
+      SIZE1          = 60
+    };
+
+    typedef struct {
+      uint16_t num;
+      uint16_t len;
+      uint8_t *val;
+    } CoapOpt;
+
     const char* getCoapCodeName(uint8_t cls, uint8_t detail);
+    void printOption(const CoapOpt &opt);
 
   public:
     uint8_t  coapVersion;
@@ -100,11 +99,14 @@ class CoapBase {
   protected:
     UDP *_udp;
     int _port;
-    uint8_t *buffer = NULL; 
-    int _maxBufferSize;
+
+    typedef struct {
+      uint8_t data[DEFAULT_BUFFER_SIZE];
+      uint16_t size;
+    } CoapPacket;
     
   public:
-    CoapBase(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
+    CoapBase(UDP &udp, int port = DEFAULT_COAP_PORT);
     void beginConnection();
 };
 
@@ -114,9 +116,9 @@ class CoapTx: public CoapBase {
     char* dstIp = NULL;
     int dstPort;
 
-    uint16_t setBuffer();
-    void transmitPacket(const char *ip, int port, uint16_t actualBufferSize);
-    void insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
+    uint16_t setBuffer(uint8_t *buffer);
+    void transmitPacket(const char *ip, int port, uint8_t *buffer, uint16_t actualBufferSize);
+    void insertArrayToBuffer(uint8_t *buffer, uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
     uint8_t encodeOptionField(uint16_t value, uint8_t out[3]);
     void setDstAddress(const char* ip, int port);
     void decomposeUrlIntoOptions(const char* destUri);
@@ -131,16 +133,27 @@ class CoapTx: public CoapBase {
 
 class CoapRx: public CoapBase {
   private:
-    CoapMessageQueue messageQueue;
+    CircularQueue<CoapPacket, 10> bufferQueue;
     void parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen);
     CoapResource resource;
 
   public:
-    CoapRx(UDP &udp, int port = DEFAULT_COAP_PORT, int maxBufferSize = DEFAULT_BUFFER_SIZE);
+    CoapRx(UDP &udp, int port = DEFAULT_COAP_PORT);
     bool receiveMessage();
     void parseReceived(CoapMessage &msg);
     void handleBulkMessage();
 
     void addHandler(const char* path, uint8_t method, CoapHandler handler);
+};
+
+class Coap {
+  private:
+    CoapTx tx;
+    CoapRx rx;
+  public:
+    Coap();
+    void transmmit();
+    void receive();
+    void handleReceivePacket();
 };
 #endif

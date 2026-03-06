@@ -1,7 +1,7 @@
 #include "coap.h"
-void CoapTx::insertArrayToBuffer(uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen) {
+void CoapTx::insertArrayToBuffer(uint8_t *buffer, uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen) {
   if (entryLen == 0) return;
-  for(uint16_t iEntry = 0; iEntry < entryLen && iBuffer < this->_maxBufferSize; iEntry++) {
+  for(uint16_t iEntry = 0; iEntry < entryLen && iBuffer < DEFAULT_BUFFER_SIZE; iEntry++) {
     buffer[iBuffer++] = entry[iEntry];
   }
 }
@@ -24,9 +24,7 @@ uint8_t CoapTx::encodeOptionField(uint16_t value, uint8_t out[3]) {
   return 3;
 }
 
-uint16_t CoapTx::setBuffer() {
-  if (this->_maxBufferSize < 4) return 0;
-
+uint16_t CoapTx::setBuffer(uint8_t *buffer) {
   uint8_t tokenLen = message.tokenLen;
   if (tokenLen > 8) return 0;
 
@@ -41,9 +39,8 @@ uint16_t CoapTx::setBuffer() {
   buffer[iBuffer++] = (message.messageId >> 8) & 0xFF;
   buffer[iBuffer++] = message.messageId & 0xFF;
 
-  this->insertArrayToBuffer(iBuffer, message.token, tokenLen);
+  this->insertArrayToBuffer(buffer, iBuffer, message.token, tokenLen);
 
-  Serial.printf("optionsize: %d\n", message.optionSize);
   uint16_t prevOptNum = 0;
   for(uint8_t iOption = 0; iOption < message.optionSize; iOption++) {
     uint16_t deltaTemp = message.options[iOption].num - prevOptNum;
@@ -56,21 +53,20 @@ uint16_t CoapTx::setBuffer() {
     buffer[iBuffer++] = (delta[0] << 4) | (len[0] & 0x0F);
     for(uint8_t i = 1; i < deltaFieldSize; i++) buffer[iBuffer++] = delta[i];
     for(uint8_t i = 1; i < lenFieldSize; i++) buffer[iBuffer++] = len[i];
-    this->insertArrayToBuffer(iBuffer, message.options[iOption].val, message.options[iOption].len);
+    this->insertArrayToBuffer(buffer, iBuffer, message.options[iOption].val, message.options[iOption].len);
   }
 
   buffer[iBuffer++] = 0xFF;
 
   if (message.payloadLen > 0) {
-    if (iBuffer + 1 >= this->_maxBufferSize) return 0;
-    this->insertArrayToBuffer(iBuffer, message.payload, message.payloadLen);
+    if (iBuffer + 1 >= DEFAULT_BUFFER_SIZE) return 0;
+    this->insertArrayToBuffer(buffer, iBuffer, message.payload, message.payloadLen);
   }
 
   return iBuffer;
 }
 
-void CoapTx::transmitPacket(const char *ip, int port, uint16_t actualBufferSize) {
-  yield();
+void CoapTx::transmitPacket(const char *ip, int port, uint8_t *buffer, uint16_t actualBufferSize) {
   int ok = this->_udp->beginPacket(ip, port);
   if (!ok) {
     Serial.println("beginPacket failed");
@@ -235,8 +231,6 @@ void CoapTx::decomposeUrlIntoOptions(const char* destUri) {
 }
 
 void CoapTx::init(const char* ip, int port, uint8_t tokenLen) {
-  beginConnection();
-
   // init header
   if(tokenLen > 8) return;
   message.coapVersion = 1;
@@ -269,8 +263,9 @@ void CoapTx::transmitMessage() {
     return;
   }
 
-  uint16_t actualBufferSize = this->setBuffer();
-  if(actualBufferSize > DEFAULT_BUFFER_SIZE) return;
+  CoapPacket packet;
+  packet.size = this->setBuffer(packet.data);
+  if(packet.size > DEFAULT_BUFFER_SIZE) return;
   message.diagnostic();
-  this->transmitPacket(dstIp, dstPort, actualBufferSize);
+  this->transmitPacket(dstIp, dstPort, packet.data, packet.size);
 }

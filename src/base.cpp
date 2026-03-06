@@ -1,7 +1,6 @@
 #include "coap.h"
 
-CoapBase::CoapBase(UDP &udp, int port, int maxBufferSize) : _udp(&udp), _port(port), _maxBufferSize(maxBufferSize) {
-  buffer = (uint8_t*) malloc(this->_maxBufferSize);
+CoapBase::CoapBase(UDP &udp, int port) : _udp(&udp), _port(port) {
 }
 
 
@@ -84,7 +83,7 @@ const char* getOptionName(uint16_t num) {
     }
 }
 
-void printOption(const CoapOpt &opt) {
+void CoapMessage::printOption(const CoapOpt &opt) {
   const char* name = getOptionName(opt.num);
 
   Serial.printf("%s\t: ", name); // fixed width 13 chars

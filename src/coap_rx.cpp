@@ -1,6 +1,6 @@
 #include "coap.h"
-CoapRx::CoapRx(UDP &udp, int port, int bufferSize)
-    : CoapBase(udp, port, bufferSize), messageQueue(COAP_MSG_QUEUE_SIZE), resource("")
+CoapRx::CoapRx(UDP &udp, int port)
+    : CoapBase(udp, port), resource("")
 {
 }
 
@@ -87,23 +87,21 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
 
 bool CoapRx::receiveMessage() {
   uint16_t bufferSize = this->_udp->parsePacket();
-  if (bufferSize < 4) return false; // header only
+  if (bufferSize < 4 || bufferSize > DEFAULT_BUFFER_SIZE) return false; // header only
 
-  uint8_t buffer[bufferSize];
-  this->_udp->read(buffer, bufferSize);
-  messageQueue.enqueue(buffer, bufferSize);
+  CoapPacket packet;
+  this->_udp->read(packet.data, packet.size);
+  bufferQueue.push(packet);
   return true;
 }
 
 void CoapRx::handleBulkMessage() {
-  while(!this->messageQueue.isEmpty()) {
-    int actualBufferSize = _maxBufferSize; // temp
-    this->messageQueue.dequeue(buffer, actualBufferSize);
-
-    if(actualBufferSize > DEFAULT_BUFFER_SIZE) return;
+  while(!bufferQueue.empty()) {
+    CoapPacket packet = bufferQueue.front();
+    bufferQueue.pop();
 
     CoapMessage msg;
-    this->parseReceived(msg, buffer, actualBufferSize);
+    this->parseReceived(msg, packet.data, packet.size);
     msg.diagnostic();
 
     uint8_t clsCode = msg.code >> 5, detailCode = msg.code & 0x1F;
@@ -111,17 +109,6 @@ void CoapRx::handleBulkMessage() {
       uint16_t uriIndex = 0;
       while(uriIndex != msg.optionSize && msg.options[uriIndex].num != 11) uriIndex++;
 
-      /*String path = "";
-      while(uriIndex != msg.optionSize && msg.options[uriIndex].num == 11) {
-        if(path != "") path += "/";
-        path += (char*) msg.options[uriIndex].val;
-        //path.append((char*)msg.options[uriIndex].val, msg.options[uriIndex].len);
-        uriIndex++;
-      }
-      path += "\0";
-      CoapMessage msgResponse;
-      Serial.printf("path: %s", path);
-      this->resource.handleRequest(path.c_str(), detailCode, msg, msgResponse);*/
       size_t totalLen = 0;
       uint16_t tmpIndex = uriIndex;
       while(tmpIndex != msg.optionSize && msg.options[tmpIndex].num == 11) {
