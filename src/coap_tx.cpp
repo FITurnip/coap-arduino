@@ -24,7 +24,7 @@ uint8_t CoapTx::encodeOptionField(uint16_t value, uint8_t out[3]) {
   return 3;
 }
 
-uint16_t CoapTx::setBuffer(uint8_t *buffer) {
+uint16_t CoapTx::setBuffer(CoapMessage &message, uint8_t *buffer) {
   uint8_t tokenLen = message.tokenLen;
   if (tokenLen > 8) return 0;
 
@@ -66,15 +66,8 @@ uint16_t CoapTx::setBuffer(uint8_t *buffer) {
   return iBuffer;
 }
 
-void CoapTx::transmitPacket(const char *ip, int port, uint8_t *buffer, uint16_t actualBufferSize) {
-  int ok = this->_udp->beginPacket(ip, port);
-  if (!ok) {
-    Serial.println("beginPacket failed");
-    return;
-  }
-  this->_udp->write(buffer, actualBufferSize);
-  this->_udp->endPacket();
-  yield();
+void CoapTx::transmitPacket(const char *ip, int port, CoapPacket packet) {
+  this->_transmit(ip, port, packet);
 }
 
 void CoapTx::normalizeUriPath(char* path) {
@@ -107,42 +100,22 @@ void CoapTx::normalizeUriPath(char* path) {
   }
 }
 
-void CoapTx::setDstAddress(const char* ip, int port) {
-    if(this->dstIp) {
-        free((void*)this->dstIp);
-        this->dstIp = nullptr;
-    }
+void CoapTx::decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg) {
+  if(!cfg.uri) return;
 
-    if(!ip) return;
-    size_t len = strlen(ip) + 1;
-    char* copy = (char*)malloc(len);
-    if(!copy) return;
-    memcpy(copy, ip, len);
-    this->dstIp = copy;
-    this->dstPort = port;
-}
-
-void CoapTx::decomposeUrlIntoOptions(const char* destUri) {
-  if(!destUri) return;
-
-  size_t len = strlen(destUri) + 1;
-  char* uri = (char*)malloc(len);
-  if(!uri) return;
-  strcpy(uri, destUri);
+  char uri[256];
+  strncpy(uri, cfg.uri, sizeof(uri)-1);
+  uri[sizeof(uri)-1] = 0;
 
   // step 1: must be absllute uri
-  char* reformattedUri = strstr(uri, "://");
-  if(!reformattedUri) {
-    free(uri);
-    return;
-  }
-  char* schemeEnd = reformattedUri;
+  char* schemeEnd = strstr(uri, "://");
+  if(!schemeEnd) return;
+
   int schemeLen = schemeEnd - uri;
+  char* hostStart = schemeEnd + 3; // shift ://
 
-  reformattedUri += 3; // shift ://
-  char* path = strchr(reformattedUri, '/');
-
-  if(!path) path = reformattedUri + strlen(reformattedUri);
+  char* path = strchr(hostStart, '/');
+  if(!path) path = hostStart + strlen(hostStart);
 
   // step 2: resolve reformattedUri
   if(path) this->normalizeUriPath(path);
@@ -153,119 +126,124 @@ void CoapTx::decomposeUrlIntoOptions(const char* destUri) {
   if(schemeLen == 4 && strncasecmp(uri, "coap", 4) == 0) curDstPort = 5683;
   else if(schemeLen == 5 && strncasecmp(uri, "coaps", 5) == 0) curDstPort = 5684;
   isCoapScheme = curDstPort != 0;
-  if(!isCoapScheme) {
-    free(uri);
-    return;
-  }
+  if(!isCoapScheme) return;
 
   // step 4: must not contain fragment
-  char* frag = strchr(reformattedUri, '#');
-  if(frag) {
-    free(uri);
-    return;
-  }
+  char* frag = strchr(schemeEnd, '#');
+  if(frag) return;
 
   // step 5: add host to option if dstIp != host. percent-econdings convertion is skipped
-  char *hostStart = schemeEnd + 3;
-  char *hostEnd = hostStart;
+  char* hostEnd = hostStart;
   while(*hostEnd && *hostEnd != '/' && *hostEnd != ':') hostEnd++;
 
-  int hostLen = hostEnd - hostStart, dstLen = strlen(dstIp);
-  if(hostStart[0] == '[' && hostStart[hostLen-1] == ']') {
-    hostStart++;
-    hostLen -= 2;
-  }
-
-  if(hostLen != dstLen || strncmp(hostStart, dstIp, hostLen) != 0) {
-    uint8_t* hostCopy = (uint8_t*)malloc(hostLen);
-    if(hostCopy) {
-      for(int i = 0; i < hostLen; i++) hostCopy[i] = tolower((unsigned char) hostStart[i]);
-      message.addOption(3, (uint16_t) hostLen, hostCopy);
-    }
+  int hostLen = hostEnd - hostStart;
+  if(hostLen != (int)strlen(cfg.dstIp) || strncmp(hostStart, cfg.dstIp, hostLen) != 0) {
+    uint8_t hostVal[40];
+    int copyLen = hostLen < 40 ? hostLen : 39;
+    for(int i = 0; i < copyLen; i++) hostVal[i] = tolower((unsigned char) hostStart[i]);
+    msg.addOption(3, (uint16_t) copyLen, hostVal);
   }
 
   // step 6: if uri didnt contain port, port is default port the scheme
+  if(!hostEnd) hostEnd = hostStart + strlen(hostStart);
   char* portStart = strchr(hostStart, ':');
-  if(portStart && portStart < path) {
-    curDstPort = atoi(portStart + 1);
-  }
+  if(portStart && portStart < hostEnd) curDstPort = atoi(portStart + 1);
 
   // step 7: add port to option if not equal to dstPort
-  if(curDstPort != dstPort) {
-    uint16_t portVal = curDstPort;
-    message.addOption(7, sizeof(uint16_t), (uint8_t*)&portVal);
-  }
+  if(curDstPort != cfg.dstPort) msg.addOption(7, sizeof(uint16_t), (uint8_t*)&curDstPort);
 
   // step 8: add path to option if exist
-  char* queryStart = strchr(path, '?');
-  if(path && !(path[0]=='/' && path[1]=='\0')) {
-    for(char* seg = path; *seg && seg < queryStart; ) {
-      if(*seg == '/') seg++;
-      if(!*seg) break;
-
-      char* next = strchr(seg, '/');
-      if(!next || (queryStart && next > queryStart)) next = queryStart;
-
-      size_t len = next - seg;
-      if(len) message.addOption(11, (uint16_t)len, (uint8_t*)seg);
-
-      seg = next ? next : NULL;
-    }
+  for(char* seg = path; *seg && *seg != '?'; ) {
+    if(*seg == '/') { seg++; continue; }
+    char* next = strchr(seg, '/');
+    if(!next || next > strchr(path, '?')) next = strchr(path, '?');
+    size_t len = next ? next - seg : strlen(seg);
+    if(len) msg.addOption(11, len, (uint8_t*)seg);
+    seg = next ? next : nullptr;
   }
 
   // step 9: add query if exist
-  if(queryStart && *(queryStart+1)) {
+  char* queryStart = strchr(path, '?');
+  if(queryStart) {
     char* arg = queryStart + 1;
-    char* next;
     while(arg && *arg) {
-      next = strchr(arg, '&');
+      char* next = strchr(arg, '&');
       size_t len = next ? (size_t)(next - arg) : strlen(arg);
-
-      if(len) {
-        message.addOption(15, (uint16_t)len, (uint8_t*)arg);
-      }
-      arg = next ? next + 1 : NULL;
+      if(len) msg.addOption(15, len, (uint8_t*)arg);
+      arg = next ? next + 1 : nullptr;
     }
   }
-  free(uri);
 }
 
-void CoapTx::init(const char* ip, int port, uint8_t tokenLen) {
-  // init header
-  if(tokenLen > 8) return;
-  message.coapVersion = 1;
-  message.type = 0;
+CoapTx& CoapTx::setConfig(const CoapTxConfig &cfg) {
+  unsigned int lastMsgIdx = msgList.length() - 1;
+  if(msgList.isFull()) return *this;
+  if(cfg.tokenLen > 8) return *this;
+  CoapMessage newMsg;
+  newMsg.messageId = lastMsgIdx >= 0 ? newMsg.messageId + 1 : random(0, 65536);
+  newMsg.tokenLen = cfg.tokenLen;
+  for(uint8_t i = 0; i < newMsg.tokenLen; i++) newMsg.token[i] = random(0, 256);
   
-  message.code = 0x01;
-  message.messageId = random(0, 65536);
-  message.payloadLen = 0;
-  message.tokenLen = tokenLen;
+  if(cfg.dstIp) {
+    strncpy(newMsg.dstIp, cfg.dstIp, sizeof(newMsg.dstIp)-1);
+    newMsg.dstIp[sizeof(newMsg.dstIp) -1] = '\0';
+  }
+  newMsg.dstPort = cfg.dstPort;
 
-  this->setDstAddress(ip, port);
+  this->decomposeUrlIntoOptions(newMsg, cfg);
+
+  msgList.push(newMsg);
+
+  return *this;
 }
 
-void CoapTx::setMessage(const char* uri) {
-  // regenerate token
-  if(message.tokenLen > 8) return;
-  for(uint8_t i = 0; i < message.tokenLen; i++) message.token[i] = random(0, 256);
+template <typename T>
+void CoapTx::transmitLastMessage(CoapType type, CoapMethod method, T payload, uint16_t payloadLen) {
+  unsigned int lastMsgIdx = msgList.length() - 1;
+  if(lastMsgIdx == -1) return;
+  CoapMessage &msg = msgList[lastMsgIdx];
 
-  // wrap messageId
-  message.messageId++;
-
-  // add option
-  message.optionSize = 0;
-  this->decomposeUrlIntoOptions(uri);
-}
-
-void CoapTx::transmitMessage() {
-  if (!dstIp || !dstPort) {
+  if (!msg.dstIp || !msg.dstPort) {
     Serial.println("no ip:port");
     return;
   }
 
-  CoapPacket packet;
-  packet.size = this->setBuffer(packet.data);
+  msg.type = type;
+  msg.code = method;
+
+  if(method != COAP_EMPTY && payloadLen > 0) {
+    static_assert(
+      std::is_same<T, const char*>::value || 
+      std::is_same<T, uint8_t*>::value || 
+      std::is_same<T, char*>::value,
+      "Tipe data tidak didukung!"
+    );
+    msg.payloadLen = payloadLen;
+    memcpy(msg.payload, payload, msg.payloadLen);
+    if constexpr (std::is_same<T, const char*>::value || std::is_same<T, char*>::value) {
+      if(msg.payload[msg.payloadLen] != '\0') msg.payload[msg.payloadLen++] = '\0';
+    }
+  }
+
+  Request request;
+  strncpy(request.dstIp, msg.dstIp, sizeof(request.dstIp));
+  request.dstPort = msg.dstPort,
+  request.AckMetadata.isAck = type,
+  request.messageId = msg.messageId,
+  request.tokenLen = msg.tokenLen;
+  memcpy(request.token, msg.token, request.tokenLen);
+
+  CoapPacket &packet = request.packet;
+  packet.size = this->setBuffer(msg, packet.data);
   if(packet.size > DEFAULT_BUFFER_SIZE) return;
-  message.diagnostic();
-  this->transmitPacket(dstIp, dstPort, packet.data, packet.size);
+  msg.diagnostic();
+
+  waitingResponseList.push(request);
+  msgList.remove(lastMsgIdx);
+  this->transmitPacket(request.dstIp, request.dstPort, packet);
 }
+
+void CoapTx::sendEmpty() {
+  this->transmitLastMessage(COAP_NON, COAP_GET);
+}
+

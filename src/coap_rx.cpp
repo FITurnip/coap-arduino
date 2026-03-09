@@ -1,9 +1,4 @@
 #include "coap.h"
-CoapRx::CoapRx(UDP &udp, int port)
-    : CoapBase(udp, port), resource("")
-{
-}
-
 void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
   // --- Header ---
   msg.coapVersion   = buffer[0] >> 6;
@@ -68,73 +63,22 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
     uint8_t* val = (uint8_t*)malloc(optLen);
     memcpy(val, buffer + iBuffer, optLen);
     iBuffer += optLen;
-
-    msg.options[msg.optionSize].num = optionNum;
-    msg.options[msg.optionSize].len = optLen;
-    msg.options[msg.optionSize].val = val;
-    msg.optionSize++;
+    msg.addOption(optionNum, optLen, val);
   }
 
   // --- Payload ---
   if (iBuffer < bufferLen && buffer[iBuffer] == 0xFF) {
-    msg.payload     = &buffer[iBuffer++];
     msg.payloadLen  = bufferLen - iBuffer;
+    memcpy(msg.payload, &buffer[iBuffer++], msg.payloadLen);
   } else {
-    msg.payload     = nullptr;
     msg.payloadLen  = 0;
   }
 }
 
 bool CoapRx::receiveMessage() {
-  uint16_t bufferSize = this->_udp->parsePacket();
-  if (bufferSize < 4 || bufferSize > DEFAULT_BUFFER_SIZE) return false; // header only
-
-  CoapPacket packet;
-  this->_udp->read(packet.data, packet.size);
-  bufferQueue.push(packet);
-  return true;
-}
-
-void CoapRx::handleBulkMessage() {
-  while(!bufferQueue.empty()) {
-    CoapPacket packet = bufferQueue.front();
-    bufferQueue.pop();
-
-    CoapMessage msg;
-    this->parseReceived(msg, packet.data, packet.size);
-    msg.diagnostic();
-
-    uint8_t clsCode = msg.code >> 5, detailCode = msg.code & 0x1F;
-    if(clsCode == 0 && detailCode > 0) {
-      uint16_t uriIndex = 0;
-      while(uriIndex != msg.optionSize && msg.options[uriIndex].num != 11) uriIndex++;
-
-      size_t totalLen = 0;
-      uint16_t tmpIndex = uriIndex;
-      while(tmpIndex != msg.optionSize && msg.options[tmpIndex].num == 11) {
-          totalLen += msg.options[tmpIndex].len;
-          tmpIndex++;
-      }
-      uint16_t segmentCount = tmpIndex - uriIndex;
-      if(segmentCount > 1) totalLen += segmentCount - 1;
-
-      char* path = (char*)malloc(totalLen + 1);
-      if(!path) return;
-
-      path[0] = '\0';
-      while(uriIndex != msg.optionSize && msg.options[uriIndex].num == 11) {
-          if(strlen(path) > 0) strcat(path, "/");
-          strncat(path, (char*)msg.options[uriIndex].val, msg.options[uriIndex].len);
-          uriIndex++;
-      }
-
-      CoapMessage msgResponse;
-      Serial.printf("path: %s\n", path);
-      this->resource.handleRequest(path, detailCode, msg, msgResponse);
-
-      free(path);
-    }
-  }
+  bool ok = this->_receive();
+  if (ok) bufferQueue.push(lastPacketReceived);
+  return ok;
 }
 
 CoapResource::CoapResource(const char* p) {
@@ -157,10 +101,6 @@ CoapResource* CoapResource::findChild(const char* name) {
     }
   }
   return nullptr;
-}
-
-void CoapRx::addHandler(const char* path, uint8_t method, CoapHandler handler) {
-  this->resource.addHandler(path, method, handler);
 }
 
 CoapResource* CoapResource::findOrCreateChild(const char* name) {

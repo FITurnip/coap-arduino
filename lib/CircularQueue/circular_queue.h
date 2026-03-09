@@ -30,5 +30,4 @@ public:
 };
 
 #include "circular_queue.tpp"
-
 #endif

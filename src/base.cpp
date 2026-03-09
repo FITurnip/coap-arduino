@@ -1,11 +1,49 @@
 #include "coap.h"
 
-CoapBase::CoapBase(UDP &udp, int port) : _udp(&udp), _port(port) {
+CoapSocket::CoapSocket(int port) {
+  this->_port = port;
 }
 
+bool CoapSocket::_transmit(const char *ip, int port, CoapPacket &packet) {
+  int ok = this->_udp.beginPacket(ip, port);
+  if (!ok) return false;
+  this->_udp.write(packet.data, packet.size);
+  this->_udp.endPacket();
+  yield();
+  return true;
+}
 
-void CoapBase::beginConnection() {
-    this->_udp->begin(this->_port);
+bool CoapSocket::_receive() {
+  CoapPacket packet;
+  packet.size = this->_udp.parsePacket();
+  if (packet.size < 4 || packet.size > DEFAULT_BUFFER_SIZE) return false;
+  this->_udp.read(packet.data, packet.size);
+  return true;
+}
+
+void CoapSocket::start(WifiCfg wifiCfg) {
+  if(wifiCfg.localIP == INADDR_NONE) {
+    wifiCfg.localIP = IPAddress(192, 168, 1, 15);
+    wifiCfg.gateway = IPAddress(192, 168, 1, 1);
+    wifiCfg.subnet  = IPAddress(255, 255, 255, 0);
+  }
+
+  if(!WiFi.config(wifiCfg.localIP, wifiCfg.gateway, wifiCfg.subnet)) return;
+  WiFi.begin(wifiCfg.ssid, wifiCfg.password);
+  
+  while (WiFi.status() != WL_CONNECTED) delay(500);
+  Serial.println("\nWiFi connected");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+  this->_udp.begin(this->_port);
+}
+
+WiFiUDP* CoapSocket::getTransport() {
+  return &_udp;
+}
+
+void CoapSocket::setTransport(WiFiUDP *udp) {
+  this->_udp = *udp;
 }
 
 const char* CoapMessage::getCoapCodeName(uint8_t cls, uint8_t detail) {
@@ -41,10 +79,11 @@ const char* CoapMessage::getCoapCodeName(uint8_t cls, uint8_t detail) {
   return "UNKNOWN";
 }
 
-void CoapMessage::addOption(uint16_t num, uint16_t len, uint8_t *val) {
+void CoapMessage::addOption(uint16_t num, uint16_t len, const uint8_t *val) {
+  if(optionSize >= MAX_OPTIONS || len > MAX_OPTION_VAL_LEN) return;
   options[optionSize].num = num;
   options[optionSize].len = len;
-  options[optionSize].val = val;
+  memcpy(options[optionSize].val, val, len);
   optionSize++;
 }
 
@@ -126,10 +165,10 @@ void CoapMessage::diagnostic() {
   Serial.printf("MID\t\t: 0x%X\n", messageId);
   Serial.printf("Token\t\t: 0x%X\n", token32);
 
-
   for(uint8_t i = 0; i < optionSize; i++) {
     printOption(options[i]);
   }
+  Serial.println((const char*)payload);
   Serial.print("\n");
 }
 
