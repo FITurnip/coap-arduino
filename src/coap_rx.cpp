@@ -67,7 +67,10 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
   }
 
   // --- Payload ---
-  if (iBuffer < bufferLen && buffer[iBuffer] == 0xFF) {
+  if(buffer[iBuffer] == 0xFF) {
+    iBuffer++;
+  }
+  if (iBuffer < bufferLen) {
     msg.payloadLen  = bufferLen - iBuffer;
     memcpy(msg.payload, &buffer[iBuffer++], msg.payloadLen);
   } else {
@@ -78,7 +81,17 @@ void CoapRx::parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen) {
 bool CoapRx::receiveMessage() {
   bool ok = this->_receive();
   if (ok) bufferQueue.push(lastPacketReceived);
+  lastPacketReceived.size = 0;
   return ok;
+}
+
+bool CoapRx::shiftMessage(CoapMessage &msg) {
+  if(bufferQueue.empty()) return false;
+  CoapPacket packet = bufferQueue.front();
+  bufferQueue.pop();
+  this->parseReceived(msg, packet.data, packet.size);
+  msg.print();
+  return true;
 }
 
 CoapResource::CoapResource(const char* p) {
@@ -133,12 +146,13 @@ void CoapResource::addHandler(const char* fullPath, uint8_t method, CoapHandler 
     free(pathCopy);
 }
 
-void CoapResource::handleRequest(const char* fullPath, uint8_t method, CoapMessage& req, CoapMessage& res) {
+void CoapResource::handleRequest(const char* fullPath, uint8_t method, CoapMessage& req) {
   if(!fullPath || method >= 4) return;
 
-  char* pathCopy = (char*)malloc(strlen(fullPath)+1);
-  if(!pathCopy) return;
+  char pathCopy[strlen(fullPath) + 1];
+
   strcpy(pathCopy, fullPath);
+  pathCopy[sizeof(pathCopy) - 1] = '\0';
 
   char* token = strtok(pathCopy, "/");
   CoapResource* node = this;
@@ -149,10 +163,51 @@ void CoapResource::handleRequest(const char* fullPath, uint8_t method, CoapMessa
   }
 
   if(node && node->handlers[method]) {
-    node->handlers[method](req, res);
+    CoapMessage resMsg;
+    resMsg = node->handlers[method](req);
   } else {
     Serial.println("4.04 NOT_FOUND");
   }
+}
 
-  free(pathCopy);
+void CoapRx::handleReceivedMsg() {
+  CoapMessage msg;
+  bool isNotEmpty = this->shiftMessage(msg);
+  if(!isNotEmpty) return;
+  uint8_t clsCode = msg.code >> 5, detailCode = msg.code & 0x1F;
+
+  if(clsCode == 0 && detailCode > 0) {
+    uint16_t uriIndex = 0;
+    while(uriIndex != msg.optionSize && msg.options[uriIndex].num != 11) uriIndex++;
+
+    size_t totalLen = 0;
+    uint16_t tmpIndex = uriIndex;
+    while(tmpIndex != msg.optionSize && msg.options[tmpIndex].num == 11) {
+        totalLen += msg.options[tmpIndex].len;
+        tmpIndex++;
+    }
+    uint16_t segmentCount = tmpIndex - uriIndex;
+    if(segmentCount > 1) totalLen += segmentCount - 1;
+
+    char path[totalLen + 1];
+    uint16_t currentPos = 0;
+    path[0] = '\0';
+    while(uriIndex != msg.optionSize && msg.options[uriIndex].num == 11) {
+      if(currentPos > 0 && currentPos < sizeof(path) - 1) {
+        path[currentPos++] = '/';
+        path[currentPos] = '\0';
+      }
+
+      uint16_t segmentLen = msg.options[uriIndex].len;
+      if(currentPos + segmentLen < sizeof(path)) {
+        memcpy(&path[currentPos], msg.options[uriIndex].val, segmentLen);
+        currentPos += segmentLen;
+        path[currentPos] = '\0'; // Selalu tutup dengan null terminator
+      }
+      uriIndex++;
+    }
+
+    CoapMessage msgResponse;
+    this->resource.handleRequest(path, detailCode, msg);
+  }
 }

@@ -5,28 +5,7 @@
 #include <WiFiUdp.h>
 #include "../lib/CircularQueue/circular_queue.h"
 #include "../lib/StaticList/static_list.h"
-
-#define DEFAULT_COAP_PORT 5683
-#define DEFAULT_BUFFER_SIZE 1152
-#define DEFAULT_PAYLOAD_SIZE 1024
-#define MAX_MSG_ENTRIES 10
-#define MAX_OPTION_VAL_LEN 64
-#define MAX_OPTIONS 32
-
-#define ACK_TIMEOUT       2000
-#define ACK_RANDOM_FACTOR 1.5
-#define MAX_RETRANSMIT    4
-#define NSTART            1       // skipped, for now use it for waiting list just one
-#define DEFAULT_LEISURE   5000
-#define PROBING_RATE      1
-
-#define MAX_TRANSMIT_SPAN 45000
-#define MAX_TRANSMIT_WAIT 93000
-#define MAX_LATENCY       100000
-#define PROCESSING_DELAY  2000
-#define MAX_RTT           202000
-#define EXCHANGE_LIFETIME 247000
-#define NON_LIFETIME      145000
+#include "coap_config.h"
 
 enum CoapMethod : uint8_t {
   COAP_EMPTY  = 0,
@@ -87,15 +66,15 @@ private:
     int dstPort;
 
     void addOption(uint16_t num, uint16_t len, const uint8_t *val);
-    void diagnostic();
+    void print();
 };
 
-typedef void (*CoapHandler)(CoapMessage &request, CoapMessage &response);
+typedef CoapMessage (*CoapHandler)(CoapMessage &packet);
 class CoapResource {
 public:
     CoapResource(const char* p = nullptr);
     void addHandler(const char* path, uint8_t method, CoapHandler handler);
-    void handleRequest(const char* path, uint8_t method, CoapMessage& req, CoapMessage& res);
+    void handleRequest(const char* path, uint8_t method, CoapMessage& req);
 
 private:
     char* path;
@@ -106,11 +85,6 @@ private:
     CoapResource* findOrCreateChild(const char* name);
     CoapResource* findChild(const char* name);
 };
-
-typedef struct {
-  const char *ssid, *password;
-  IPAddress localIP, gateway, subnet;
-} WifiCfg;
 
 class CoapSocket {
   protected:
@@ -196,16 +170,18 @@ class CoapRx: public CoapSocket {
   private:
     CircularQueue<CoapPacket, MAX_MSG_ENTRIES> bufferQueue;
     void parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen);
+    bool shiftMessage(CoapMessage &msg);
   public:
+    CoapResource resource;
     using CoapSocket::CoapSocket;
     bool receiveMessage();
+    void handleReceivedMsg();
 };
 
 class Coap {
   private:
     CoapTx _tx;
     CoapRx _rx;
-    CoapResource _resource;
   public:
     Coap(int port = DEFAULT_COAP_PORT);
     void start(WifiCfg wifiCfg);

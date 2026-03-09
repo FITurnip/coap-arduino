@@ -5,19 +5,20 @@ CoapSocket::CoapSocket(int port) {
 }
 
 bool CoapSocket::_transmit(const char *ip, int port, CoapPacket &packet) {
+  if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
   int ok = this->_udp.beginPacket(ip, port);
   if (!ok) return false;
   this->_udp.write(packet.data, packet.size);
   this->_udp.endPacket();
-  yield();
   return true;
 }
 
 bool CoapSocket::_receive() {
-  CoapPacket packet;
-  packet.size = this->_udp.parsePacket();
-  if (packet.size < 4 || packet.size > DEFAULT_BUFFER_SIZE) return false;
-  this->_udp.read(packet.data, packet.size);
+  lastPacketReceived.size = this->_udp.parsePacket();
+  if (lastPacketReceived.size < 4 || lastPacketReceived.size > DEFAULT_BUFFER_SIZE) return false;
+  this->_udp.read(lastPacketReceived.data, lastPacketReceived.size);
   return true;
 }
 
@@ -151,7 +152,7 @@ void CoapMessage::printOption(const CoapOpt &opt) {
   Serial.println();
 }
 
-void CoapMessage::diagnostic() {
+void CoapMessage::print() {
   uint32_t token32 = 0;
   for(uint8_t i = 0; i < tokenLen; i++) token32 = (token32 << 8) | token[i];
   String msgType[4] = {"CON", "NON", "ACK", "RST"};

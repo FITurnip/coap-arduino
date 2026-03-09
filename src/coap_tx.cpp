@@ -236,7 +236,7 @@ void CoapTx::transmitLastMessage(CoapType type, CoapMethod method, T payload, ui
   CoapPacket &packet = request.packet;
   packet.size = this->setBuffer(msg, packet.data);
   if(packet.size > DEFAULT_BUFFER_SIZE) return;
-  msg.diagnostic();
+  msg.print();
 
   waitingResponseList.push(request);
   msgList.remove(lastMsgIdx);
