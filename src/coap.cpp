@@ -13,5 +13,13 @@ CoapTx& Coap::tx() { return this->_tx; }
 CoapRx& Coap::rx() { return this->_rx; }
 
 void Coap::addHandler(const char* path, uint8_t method, CoapHandler handler) {
-  this->_rx.resource.addHandler(path, method, handler);
+  this->resource.addHandler(path, method, handler);
+}
+
+void Coap::handleReceivedMsg() {
+  CoapMessage msg; CoapTransactionContext reqContext;
+  bool isNotEmpty = this->_rx.shiftMessage(msg, reqContext);
+  if(!isNotEmpty) return;
+  CoapTransactionContext respContext = this->resource.handleRequest(msg, reqContext);
+  this->_tx.sendResponse(respContext);
 }

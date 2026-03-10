@@ -1,11 +1,4 @@
 #include "coap.h"
-void CoapTx::insertArrayToBuffer(uint8_t *buffer, uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen) {
-  if (entryLen == 0) return;
-  for(uint16_t iEntry = 0; iEntry < entryLen && iBuffer < DEFAULT_BUFFER_SIZE; iEntry++) {
-    buffer[iBuffer++] = entry[iEntry];
-  }
-}
-
 uint8_t CoapTx::encodeOptionField(uint16_t value, uint8_t out[3]) {
   if (value < 13) {
     out[0] = value;
@@ -24,50 +17,70 @@ uint8_t CoapTx::encodeOptionField(uint16_t value, uint8_t out[3]) {
   return 3;
 }
 
-uint16_t CoapTx::setBuffer(CoapMessage &message, uint8_t *buffer) {
-  uint8_t tokenLen = message.tokenLen;
-  if (tokenLen > 8) return 0;
-
-  uint16_t iBuffer = 0;
-
-  buffer[iBuffer++] =
-    (message.coapVersion << 6) |
-    ((message.type & 0x03) << 4) |
-    (tokenLen & 0x0F);
-
-  buffer[iBuffer++] = message.code;
-  buffer[iBuffer++] = (message.messageId >> 8) & 0xFF;
-  buffer[iBuffer++] = message.messageId & 0xFF;
-
-  this->insertArrayToBuffer(buffer, iBuffer, message.token, tokenLen);
-
-  uint16_t prevOptNum = 0;
-  for(uint8_t iOption = 0; iOption < message.optionSize; iOption++) {
-    uint16_t deltaTemp = message.options[iOption].num - prevOptNum;
-    prevOptNum = message.options[iOption].num;
+void CoapTx::setBuffer(CoapMessage &msg, CoapBuffer &buffer) {
+  buffer.size = 0;
+  // size validation
+  if (msg.token.size > 8) return;
+  uint16_t bufferSize = 4 + msg.token.size, prevOptNum = 0;
+  for(uint16_t i = 0; i < msg.optionSize; i++) {
+    CoapOpt* curOpt = &msg.options[i];
+    uint16_t deltaNum = curOpt->num - prevOptNum;
+    prevOptNum = curOpt->num;
 
     uint8_t delta[3] = {0, 0, 0},  len[3] = {0, 0, 0};
-    int deltaFieldSize = this->encodeOptionField(deltaTemp, delta);
-    int lenFieldSize = this->encodeOptionField(message.options[iOption].len, len);
+    int deltaFieldSize = this->encodeOptionField(deltaNum, delta);
+    int lenFieldSize = this->encodeOptionField(curOpt->len, len);
 
-    buffer[iBuffer++] = (delta[0] << 4) | (len[0] & 0x0F);
-    for(uint8_t i = 1; i < deltaFieldSize; i++) buffer[iBuffer++] = delta[i];
-    for(uint8_t i = 1; i < lenFieldSize; i++) buffer[iBuffer++] = len[i];
-    this->insertArrayToBuffer(buffer, iBuffer, message.options[iOption].val, message.options[iOption].len);
+    bufferSize += 1 + (deltaFieldSize - 1) + (lenFieldSize - 1) + msg.options[i].len;
+  }
+  uint8_t* writeHead = buffer.data;
+  if (msg.payload.size > 0) {
+    if (msg.optionSize > 0) writeHead++; // Marker 0xFF
+    buffer.size += msg.payload.size;
+  }
+  if(buffer.size > DEFAULT_BUFFER_SIZE) return;
+
+
+  // header
+  *writeHead++ = (msg.coapVersion << 6) | ((msg.type & 0x03) << 4) | (msg.token.size & 0x0F);
+  *writeHead++ = msg.code;
+  *writeHead++ = (msg.messageId >> 8) & 0xFF;
+  *writeHead++ = msg.messageId & 0xFF;
+
+  // token
+  memcpy(writeHead, msg.token.data, msg.token.size);
+  writeHead += msg.token.size;
+
+  // options
+  prevOptNum = 0;
+  CoapOpt *readOpt = msg.options, *endOpt = msg.options + msg.optionSize;
+  while(readOpt < endOpt) {
+    uint16_t deltaNum = readOpt->num - prevOptNum;
+    prevOptNum = readOpt->num;
+
+    uint8_t delta[3] = {0, 0, 0},  len[3] = {0, 0, 0};
+    int deltaFieldSize = this->encodeOptionField(deltaNum, delta);
+    int lenFieldSize = this->encodeOptionField(readOpt->len, len);
+
+    *writeHead++ = (delta[0] << 4) | (len[0] & 0x0F);
+    for(uint8_t i = 1; i < deltaFieldSize; i++) *writeHead++ = delta[i];
+    for(uint8_t i = 1; i < lenFieldSize; i++) *writeHead++ = len[i];
+    memcpy(writeHead, readOpt->val, readOpt->len);
+    writeHead += readOpt->len;
+    readOpt++;
   }
 
-  buffer[iBuffer++] = 0xFF;
-
-  if (message.payloadLen > 0) {
-    if (iBuffer + 1 >= DEFAULT_BUFFER_SIZE) return 0;
-    this->insertArrayToBuffer(buffer, iBuffer, message.payload, message.payloadLen);
+  // payload
+  if(msg.payload.size > 0) {
+    if(msg.optionSize > 0) *writeHead++ = 0xFF; // marker
+    memcpy(writeHead, msg.payload.data, msg.payload.size);
   }
 
-  return iBuffer;
+  buffer.size = bufferSize;
 }
 
-void CoapTx::transmitPacket(const char *ip, int port, CoapPacket packet) {
-  this->_transmit(ip, port, packet);
+void CoapTx::transmitPacket(CoapTransactionContext &transactionContext) {
+  this->_transmit(transactionContext);
 }
 
 void CoapTx::normalizeUriPath(char* path) {
@@ -104,8 +117,7 @@ void CoapTx::decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg) 
   if(!cfg.uri) return;
 
   char uri[256];
-  strncpy(uri, cfg.uri, sizeof(uri)-1);
-  uri[sizeof(uri)-1] = 0;
+  snprintf(uri, sizeof(uri), "%s", cfg.uri);
 
   // step 1: must be absllute uri
   char* schemeEnd = strstr(uri, "://");
@@ -135,13 +147,25 @@ void CoapTx::decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg) 
   // step 5: add host to option if dstIp != host. percent-econdings convertion is skipped
   char* hostEnd = hostStart;
   while(*hostEnd && *hostEnd != '/' && *hostEnd != ':') hostEnd++;
-
   int hostLen = hostEnd - hostStart;
-  if(hostLen != (int)strlen(cfg.dstIp) || strncmp(hostStart, cfg.dstIp, hostLen) != 0) {
-    uint8_t hostVal[40];
-    int copyLen = hostLen < 40 ? hostLen : 39;
-    for(int i = 0; i < copyLen; i++) hostVal[i] = tolower((unsigned char) hostStart[i]);
-    msg.addOption(3, (uint16_t) copyLen, hostVal);
+  if (hostLen <= 0) return;
+
+  char tempHost[64];
+  int copyLen = (hostLen < (int)sizeof(tempHost) - 1) ? hostLen : (int)sizeof(tempHost) - 1;
+  
+  memcpy(tempHost, hostStart, copyLen);
+  tempHost[copyLen] = '\0';
+
+  IPAddress tempIp;
+  bool isNumericIp = tempIp.fromString(tempHost);
+
+  if (!isNumericIp || tempIp != cfg.dstIp) {
+    uint8_t hostVal[64];
+    for(int i = 0; i < copyLen; i++) {
+      hostVal[i] = (uint8_t)tolower((unsigned char)tempHost[i]);
+    }
+    
+    msg.addOption(URI_HOST, (uint16_t)copyLen, hostVal);
   }
 
   // step 6: if uri didnt contain port, port is default port the scheme
@@ -150,7 +174,7 @@ void CoapTx::decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg) 
   if(portStart && portStart < hostEnd) curDstPort = atoi(portStart + 1);
 
   // step 7: add port to option if not equal to dstPort
-  if(curDstPort != cfg.dstPort) msg.addOption(7, sizeof(uint16_t), (uint8_t*)&curDstPort);
+  if(curDstPort != cfg.dstPort) msg.addOption(URI_PORT, sizeof(uint16_t), (uint8_t*)&curDstPort);
 
   // step 8: add path to option if exist
   for(char* seg = path; *seg && *seg != '?'; ) {
@@ -158,7 +182,7 @@ void CoapTx::decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg) 
     char* next = strchr(seg, '/');
     if(!next || next > strchr(path, '?')) next = strchr(path, '?');
     size_t len = next ? next - seg : strlen(seg);
-    if(len) msg.addOption(11, len, (uint8_t*)seg);
+    if(len) msg.addOption(URI_PATH, len, (uint8_t*)seg);
     seg = next ? next : nullptr;
   }
 
@@ -169,7 +193,7 @@ void CoapTx::decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg) 
     while(arg && *arg) {
       char* next = strchr(arg, '&');
       size_t len = next ? (size_t)(next - arg) : strlen(arg);
-      if(len) msg.addOption(15, len, (uint8_t*)arg);
+      if(len) msg.addOption(URI_QUERY, len, (uint8_t*)arg);
       arg = next ? next + 1 : nullptr;
     }
   }
@@ -181,15 +205,11 @@ CoapTx& CoapTx::setConfig(const CoapTxConfig &cfg) {
   if(cfg.tokenLen > 8) return *this;
   CoapMessage newMsg;
   newMsg.messageId = lastMsgIdx >= 0 ? newMsg.messageId + 1 : random(0, 65536);
-  newMsg.tokenLen = cfg.tokenLen;
-  for(uint8_t i = 0; i < newMsg.tokenLen; i++) newMsg.token[i] = random(0, 256);
+  newMsg.token.size = cfg.tokenLen;
+  for(uint8_t i = 0; i < newMsg.token.size; i++) newMsg.token.data[i] = random(0, 256);
   
-  if(cfg.dstIp) {
-    strncpy(newMsg.dstIp, cfg.dstIp, sizeof(newMsg.dstIp)-1);
-    newMsg.dstIp[sizeof(newMsg.dstIp) -1] = '\0';
-  }
+  newMsg.dstIp = cfg.dstIp;
   newMsg.dstPort = cfg.dstPort;
-
   this->decomposeUrlIntoOptions(newMsg, cfg);
 
   msgList.push(newMsg);
@@ -198,10 +218,10 @@ CoapTx& CoapTx::setConfig(const CoapTxConfig &cfg) {
 }
 
 template <typename T>
-void CoapTx::transmitLastMessage(CoapType type, CoapMethod method, T payload, uint16_t payloadLen) {
-  unsigned int lastMsgIdx = msgList.length() - 1;
-  if(lastMsgIdx == -1) return;
-  CoapMessage &msg = msgList[lastMsgIdx];
+void CoapTx::transmitLastMsg(CoapType type, CoapMethod method, T payload, uint16_t payloadLen) {
+  unsigned int msgListSize = msgList.length();
+  if(msgListSize == 0) return;
+  CoapMessage &msg = msgList[msgListSize - 1];
 
   if (!msg.dstIp || !msg.dstPort) {
     Serial.println("no ip:port");
@@ -218,32 +238,33 @@ void CoapTx::transmitLastMessage(CoapType type, CoapMethod method, T payload, ui
       std::is_same<T, char*>::value,
       "Tipe data tidak didukung!"
     );
-    msg.payloadLen = payloadLen;
-    memcpy(msg.payload, payload, msg.payloadLen);
-    if constexpr (std::is_same<T, const char*>::value || std::is_same<T, char*>::value) {
-      if(msg.payload[msg.payloadLen] != '\0') msg.payload[msg.payloadLen++] = '\0';
-    }
+    msg.payload.size = payloadLen;
+    memcpy(msg.payload.data, payload, msg.payload.size);
   }
 
-  Request request;
-  strncpy(request.dstIp, msg.dstIp, sizeof(request.dstIp));
-  request.dstPort = msg.dstPort,
-  request.AckMetadata.isAck = type,
-  request.messageId = msg.messageId,
-  request.tokenLen = msg.tokenLen;
-  memcpy(request.token, msg.token, request.tokenLen);
+  CoapTransactionContext transactionContext;
+  transactionContext.dstIp = msg.dstIp;
+  transactionContext.dstPort = msg.dstPort,
+  //transactionContext.ConMetadata.isAck = type,
+  transactionContext.messageId = msg.messageId,
+  transactionContext.tokenLen = msg.tokenLen;
+  memcpy(transactionContext.token, msg.token.data, msg.token.size);
 
-  CoapPacket &packet = request.packet;
-  packet.size = this->setBuffer(msg, packet.data);
-  if(packet.size > DEFAULT_BUFFER_SIZE) return;
+  CoapBuffer &buffer = transactionContext.buffer;
+  this->setBuffer(msg, buffer);
+  if(buffer.size == 0) return;
   msg.print();
 
-  waitingResponseList.push(request);
-  msgList.remove(lastMsgIdx);
-  this->transmitPacket(request.dstIp, request.dstPort, packet);
+  waitingResponseList.push(transactionContext);
+  msgList.remove(msgListSize - 1);
+  this->transmitPacket(transactionContext);
 }
 
 void CoapTx::sendEmpty() {
-  this->transmitLastMessage(COAP_NON, COAP_GET);
+  this->transmitLastMsg(COAP_NON, COAP_GET);
+}
+
+void CoapTx::sendResponse(CoapTransactionContext &transactionContext) {
+  this->transmitPacket(transactionContext);
 }
 

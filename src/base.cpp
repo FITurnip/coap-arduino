@@ -4,21 +4,23 @@ CoapSocket::CoapSocket(int port) {
   this->_port = port;
 }
 
-bool CoapSocket::_transmit(const char *ip, int port, CoapPacket &packet) {
+bool CoapSocket::_transmit(CoapTransactionContext &transactionContext) {
   if (WiFi.status() != WL_CONNECTED) {
     return false;
   }
-  int ok = this->_udp.beginPacket(ip, port);
+  int ok = this->_udp.beginPacket(transactionContext.dstIp, transactionContext.dstPort);
   if (!ok) return false;
-  this->_udp.write(packet.data, packet.size);
-  this->_udp.endPacket();
-  return true;
+  this->_udp.write(transactionContext.buffer.data, transactionContext.buffer.size);
+  return this->_udp.endPacket();
 }
 
-bool CoapSocket::_receive() {
-  lastPacketReceived.size = this->_udp.parsePacket();
-  if (lastPacketReceived.size < 4 || lastPacketReceived.size > DEFAULT_BUFFER_SIZE) return false;
-  this->_udp.read(lastPacketReceived.data, lastPacketReceived.size);
+bool CoapSocket::_receive(CoapTransactionContext &transactionContext) {
+  transactionContext.buffer.size = this->_udp.parsePacket();
+  if (transactionContext.buffer.size < 4 || transactionContext.buffer.size > DEFAULT_BUFFER_SIZE) return false;
+  this->_udp.read(transactionContext.buffer.data, transactionContext.buffer.size);
+
+  transactionContext.dstIp    = this->_udp.remoteIP();
+  transactionContext.dstPort  = this->_udp.remotePort();
   return true;
 }
 
@@ -80,7 +82,7 @@ const char* CoapMessage::getCoapCodeName(uint8_t cls, uint8_t detail) {
   return "UNKNOWN";
 }
 
-void CoapMessage::addOption(uint16_t num, uint16_t len, const uint8_t *val) {
+void CoapMessage::addOption(CoapOptNum num, uint16_t len, const uint8_t *val) {
   if(optionSize >= MAX_OPTIONS || len > MAX_OPTION_VAL_LEN) return;
   options[optionSize].num = num;
   options[optionSize].len = len;
@@ -88,39 +90,22 @@ void CoapMessage::addOption(uint16_t num, uint16_t len, const uint8_t *val) {
   optionSize++;
 }
 
-const char* optionName(uint16_t num) {
-    switch(num) {
-        case 1: return "If-Match";
-        case 3: return "Uri-Host";
-        case 4: return "ETag";
-        case 5: return "If-None-Match";
-        case 7: return "Uri-Port";
-        case 11: return "Uri-Path";
-        case 12: return "Content-Format";
-        case 15: return "Uri-Query";
-        case 17: return "Accept";
-        case 35: return "Proxy-Uri";
-        case 39: return "Proxy-Scheme";
-        case 60: return "Size1";
-        default: return "Unknown";
-    }
-}
-const char* getOptionName(uint16_t num) {
-    switch(num) {
-        case 1: return "If-Match";
-        case 3: return "Uri-Host";
-        case 4: return "ETag";
-        case 5: return "If-None-Match";
-        case 7: return "Uri-Port";
-        case 11: return "Uri-Path";
-        case 12: return "Content-Format";
-        case 15: return "Uri-Query";
-        case 17: return "Accept";
-        case 35: return "Proxy-Uri";
-        case 39: return "Proxy-Scheme";
-        case 60: return "Size1";
-        default: return "Unknown";
-    }
+const char* getOptionName(CoapOptNum num) {
+  switch(num) {
+    case 1: return "If-Match";
+    case 3: return "Uri-Host";
+    case 4: return "ETag";
+    case 5: return "If-None-Match";
+    case 7: return "Uri-Port";
+    case 11: return "Uri-Path";
+    case 12: return "Content-Format";
+    case 15: return "Uri-Query";
+    case 17: return "Accept";
+    case 35: return "Proxy-Uri";
+    case 39: return "Proxy-Scheme";
+    case 60: return "Size1";
+    default: return "Unknown";
+  }
 }
 
 void CoapMessage::printOption(const CoapOpt &opt) {
@@ -154,7 +139,7 @@ void CoapMessage::printOption(const CoapOpt &opt) {
 
 void CoapMessage::print() {
   uint32_t token32 = 0;
-  for(uint8_t i = 0; i < tokenLen; i++) token32 = (token32 << 8) | token[i];
+  for(uint8_t i = 0; i < tokenLen; i++) token32 = (token32 << 8) | token.data[i];
   String msgType[4] = {"CON", "NON", "ACK", "RST"};
 
   uint8_t clsCode = code >> 5, detailCode = code & 0x1F;
@@ -169,7 +154,6 @@ void CoapMessage::print() {
   for(uint8_t i = 0; i < optionSize; i++) {
     printOption(options[i]);
   }
-  Serial.println((const char*)payload);
-  Serial.print("\n");
+  Serial.println((const char*)payload.data);
 }
 

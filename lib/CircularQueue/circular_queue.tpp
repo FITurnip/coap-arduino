@@ -4,7 +4,7 @@ CircularQueue<T, Capacity>::CircularQueue()
 
 template<typename T, size_t Capacity>
 bool CircularQueue<T, Capacity>::push(const T& item) {
-    if(full()) return false;
+    if(this->isFull()) return false;
 
     buffer[tail] = item;
     tail = (tail + 1) % Capacity;
@@ -14,7 +14,7 @@ bool CircularQueue<T, Capacity>::push(const T& item) {
 
 template<typename T, size_t Capacity>
 bool CircularQueue<T, Capacity>::pop() {
-    if(empty()) return false;
+    if(this->isEmpty()) return false;
 
     head = (head + 1) % Capacity;
     count--;
@@ -32,12 +32,12 @@ const T& CircularQueue<T, Capacity>::front() const {
 }
 
 template<typename T, size_t Capacity>
-bool CircularQueue<T, Capacity>::empty() const {
+bool CircularQueue<T, Capacity>::isEmpty() const {
     return count == 0;
 }
 
 template<typename T, size_t Capacity>
-bool CircularQueue<T, Capacity>::full() const {
+bool CircularQueue<T, Capacity>::isFull() const {
     return count == Capacity;
 }
 

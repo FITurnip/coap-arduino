@@ -22,60 +22,55 @@ enum CoapType : uint8_t {
   COAP_RST  = 3
 };
 
-class CoapMessage {
-private:
-  enum CoapOptNum : uint16_t {
-    IF_MATCH       = 1,
-    URI_HOST       = 3,
-    ETAG           = 4,
-    IF_NONE_MATCH  = 5,
-    URI_PORT       = 7,
-    LOCATION_PATH  = 8,
-    URI_PATH       = 11,
-    CONTENT_FORMAT = 12,
-    MAX_AGE        = 14,
-    URI_QUERY      = 15,
-    ACCEPT         = 17,
-    LOCATION_QUERY = 20,
-    PROXY_URI      = 35,
-    PROXY_SCHEME   = 39,
-    SIZE1          = 60
-    };
-
-    typedef struct {
-      uint16_t num;
-      uint16_t len;
-      uint8_t val[MAX_OPTION_VAL_LEN];
-    } CoapOpt;
-    const char* getCoapCodeName(uint8_t cls, uint8_t detail);
-    void printOption(const CoapOpt &opt);
-
-  public:
-    uint8_t  coapVersion = 1;
-    uint8_t  type;
-    uint8_t  tokenLen;
-    uint8_t  code;
-    uint16_t messageId;
-    uint8_t token[8];
-    CoapOpt options[MAX_OPTIONS];
-    uint8_t optionSize = 0;
-    uint8_t payload[DEFAULT_PAYLOAD_SIZE];
-    uint16_t  payloadLen = 0;
-
-    char dstIp[40];
-    int dstPort;
-
-    void addOption(uint16_t num, uint16_t len, const uint8_t *val);
-    void print();
+enum CoapOptNum : uint16_t {
+  IF_MATCH       = 1,
+  URI_HOST       = 3,
+  ETAG           = 4,
+  IF_NONE_MATCH  = 5,
+  URI_PORT       = 7,
+  LOCATION_PATH  = 8,
+  URI_PATH       = 11,
+  CONTENT_FORMAT = 12,
+  MAX_AGE        = 14,
+  URI_QUERY      = 15,
+  ACCEPT         = 17,
+  LOCATION_QUERY = 20,
+  PROXY_URI      = 35,
+  PROXY_SCHEME   = 39,
+  SIZE1          = 60
 };
 
-typedef CoapMessage (*CoapHandler)(CoapMessage &packet);
-class CoapResource {
-public:
-    CoapResource(const char* p = nullptr);
-    void addHandler(const char* path, uint8_t method, CoapHandler handler);
-    void handleRequest(const char* path, uint8_t method, CoapMessage& req);
+typedef struct {
+  CoapOptNum num;
+  uint16_t len;
+  uint8_t val[MAX_OPTION_VAL_LEN];
+} CoapOpt;
 
+class CoapMessage {
+private:
+  const char* getCoapCodeName(uint8_t cls, uint8_t detail);
+  void printOption(const CoapOpt &opt);
+
+public:
+  uint8_t  coapVersion = 1;
+  CoapType  type;
+  uint8_t  tokenLen;
+  uint8_t  code;
+  uint16_t messageId;
+  CoapData<8> token;
+  CoapOpt options[MAX_OPTIONS];
+  uint8_t optionSize = 0;
+  CoapData<DEFAULT_PAYLOAD_SIZE> payload;
+
+  IPAddress dstIp;
+  int dstPort;
+
+  void addOption(CoapOptNum num, uint16_t len, const uint8_t *val);
+  void print();
+};
+
+typedef CoapTransactionContext (*CoapHandler)(CoapMessage &msg);
+class CoapResource {
 private:
     char* path;
     CoapHandler handlers[5];
@@ -84,22 +79,20 @@ private:
 
     CoapResource* findOrCreateChild(const char* name);
     CoapResource* findChild(const char* name);
+
+public:
+    CoapResource(const char* p = nullptr);
+    void addHandler(const char* path, uint8_t method, CoapHandler handler);
+    CoapTransactionContext handleRequest(CoapMessage& msg, CoapTransactionContext &reqContext);
 };
 
 class CoapSocket {
   protected:
     WiFiUDP _udp;
     int _port;
-
-    typedef struct {
-      uint8_t data[DEFAULT_BUFFER_SIZE];
-      uint16_t size;
-    } CoapPacket;
-
-    CoapPacket lastPacketReceived;
     
-    bool _transmit(const char *ip, int port, CoapPacket &packet);
-    bool _receive();
+    bool _transmit(CoapTransactionContext& transactionContext);
+    bool _receive(CoapTransactionContext& transactionContext);
   public:
     CoapSocket(int port = DEFAULT_COAP_PORT);
     void start(WifiCfg wifiCfg);
@@ -112,40 +105,22 @@ class CoapTx: public CoapSocket {
   private:
     typedef struct {
       const char* uri;
-      const char* dstIp;
+      IPAddress dstIp;
       uint16_t dstPort;
       uint8_t tokenLen;
     } CoapTxConfig;
 
-    typedef struct {
-      char dstIp[40];
-      int dstPort;
-
-      struct {
-        bool isAck;
-        unsigned int expiredTime;
-        uint8_t retransmitCounter;
-      } AckMetadata;
-
-      uint8_t messageId;
-      uint8_t tokenLen;
-      uint8_t token[8];
-
-      CoapPacket packet;
-    } Request;
-
     StaticList<CoapMessage, MAX_MSG_ENTRIES> msgList;
-    StaticList<Request, MAX_MSG_ENTRIES> waitingResponseList;
+    StaticList<CoapTransactionContext, MAX_MSG_ENTRIES> waitingResponseList;
 
-    uint16_t setBuffer(CoapMessage &message, uint8_t *buffer);
-    void transmitPacket(const char *ip, int port, CoapPacket packet);
-    void insertArrayToBuffer(uint8_t *buffer, uint16_t &iBuffer, uint8_t *entry, uint16_t entryLen);
+    void setBuffer(CoapMessage &message, CoapBuffer &buffer);
+    void transmitPacket(CoapTransactionContext &transactionContext);
     uint8_t encodeOptionField(uint16_t value, uint8_t out[3]);
     void decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg);
     void normalizeUriPath(char* path);
 
     template <typename T = const char*>
-    void transmitLastMessage(CoapType type, CoapMethod method, T payload = "", uint16_t payloadLen = 0);
+    void transmitLastMsg(CoapType type, CoapMethod method, T payload = "", uint16_t payloadLen = 0);
 
   public:
     using CoapSocket::CoapSocket;
@@ -155,7 +130,7 @@ class CoapTx: public CoapSocket {
     #define DEFINE_COAP_METHOD(name, methodEnum) \
     template <typename T = const char*> \
     void name(CoapType type, T payload = "", uint16_t payloadLen = 0) { \
-        this->transmitLastMessage(type, methodEnum, payload, payloadLen); \
+        this->transmitLastMsg(type, methodEnum, payload, payloadLen); \
     }
 
     DEFINE_COAP_METHOD(get,  COAP_GET)
@@ -164,18 +139,18 @@ class CoapTx: public CoapSocket {
     DEFINE_COAP_METHOD(del,  COAP_DELETE)
 
     #undef DEFINE_COAP_METHOD
+
+    void sendResponse(CoapTransactionContext &transactionContext);
 };
 
 class CoapRx: public CoapSocket {
   private:
-    CircularQueue<CoapPacket, MAX_MSG_ENTRIES> bufferQueue;
-    void parseReceived(CoapMessage &msg, uint8_t *buffer, int bufferLen);
-    bool shiftMessage(CoapMessage &msg);
+    CircularQueue<CoapTransactionContext, MAX_MSG_ENTRIES> transactionQueue;
+    void parseReceived(CoapMessage &msg, CoapBuffer &buffer);
   public:
-    CoapResource resource;
     using CoapSocket::CoapSocket;
     bool receiveMessage();
-    void handleReceivedMsg();
+    bool shiftMessage(CoapMessage &msg, CoapTransactionContext &transactionContext);
 };
 
 class Coap {
@@ -187,7 +162,8 @@ class Coap {
     void start(WifiCfg wifiCfg);
     CoapTx& tx(); CoapRx& rx();
 
-    //void handleBulkMessage();
+    CoapResource resource;
     void addHandler(const char* path, uint8_t method, CoapHandler handler);
+    void handleReceivedMsg();
 };
 #endif

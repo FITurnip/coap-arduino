@@ -11,7 +11,7 @@
 #define ACK_TIMEOUT       2000
 #define ACK_RANDOM_FACTOR 1.5
 #define MAX_RETRANSMIT    4
-#define NSTART            1       // skipped, for now use it for waiting list just one
+#define NSTART            1       // skipped
 #define DEFAULT_LEISURE   5000
 #define PROBING_RATE      1
 
@@ -27,4 +27,25 @@ typedef struct {
   const char *ssid, *password;
   IPAddress localIP, gateway, subnet;
 } WifiCfg;
+
+template <size_t N>
+struct CoapData {
+    uint8_t data[N];
+    uint16_t size = 0;
+};
+using CoapBuffer  = CoapData<DEFAULT_BUFFER_SIZE>;
+using CoapPayload = CoapData<DEFAULT_PAYLOAD_SIZE>;
+
+struct CoapTransactionContext {
+  uint8_t type = 0;
+  uint8_t code = 0;
+  uint16_t messageId = 0;
+  uint8_t tokenLen = 8, token[8];
+
+  CoapBuffer buffer;
+
+  IPAddress dstIp;
+  int dstPort;
+}; 
+
 #endif

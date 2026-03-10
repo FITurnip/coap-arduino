@@ -20,8 +20,8 @@ public:
     T& front();
     const T& front() const;
 
-    bool empty() const;
-    bool full() const;
+    bool isEmpty() const;
+    bool isFull() const;
 
     size_t size() const;
     size_t capacity() const;
