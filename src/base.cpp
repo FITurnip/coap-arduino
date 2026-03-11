@@ -21,7 +21,6 @@ bool CoapSocket::_receive(CoapTransactionContext &transactionContext) {
   this->_udp.read(transactionContext.buffer.data, transactionContext.buffer.size);
 
   transactionContext.dstIp    = this->_udp.remoteIP();
-  //Serial.printf("dstIp receive: %s", transactionContext.dstIp.toString());
   transactionContext.dstPort  = this->_udp.remotePort();
   return true;
 }

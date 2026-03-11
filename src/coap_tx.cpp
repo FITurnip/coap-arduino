@@ -217,38 +217,6 @@ CoapTx& CoapTx::setConfig(const CoapTxConfig &cfg) {
 
   return *this;
 }
-/*
-void debugContext(const CoapTransactionContext &ctx) {
-  Serial.println(F("--- CoapTransactionContext Debug ---"));
-  
-  // Print info dasar
-  Serial.printf("Type     : %u\n", ctx.type);
-  Serial.printf("Code     : %u (Class %u.%02u)\n", ctx.code, ctx.code >> 5, ctx.code & 0x1F);
-  Serial.printf("Msg ID   : %u\n", ctx.messageId);
-  Serial.printf("TokenLen : %u\n", ctx.token.size);
-  Serial.printf("Dest     : %s:%d\n", ctx.dstIp.toString().c_str(), ctx.dstPort);
-
-  // Print Token dalam format Hex (karena token itu biner)
-  Serial.print(F("Token    : "));
-  for (int i = 0; i < ctx.token.size; i++) {
-    Serial.printf("%02X ", ctx.token.data[i]);
-  }
-  Serial.println();
-
-  // Print info Buffer
-  Serial.printf("Buf Size : %u bytes\n", ctx.buffer.size);
-  
-  // Jika ingin intip isi payload/buffer (opsional)
-  if (ctx.buffer.size > 0) {
-    Serial.print(F("Payload  : "));
-    for (int i = 0; i < (ctx.buffer.size > 16 ? 16 : ctx.buffer.size); i++) { // Limit 16 byte biar gak menuhin layar
-       Serial.printf("%02X ", ctx.buffer.data[i]);
-    }
-    if (ctx.buffer.size > 16) Serial.print("...");
-    Serial.println();
-  }
-  Serial.println(F("-----------------------------------"));
-}*/
 
 template <typename T>
 void CoapTx::transmitLastMsg(CoapType type, CoapMethod method, T payload, uint16_t payloadLen) {
@@ -290,7 +258,6 @@ void CoapTx::transmitLastMsg(CoapType type, CoapMethod method, T payload, uint16
 
   waitingResponseList.push(transactionContext);
   msgList.remove(msgListSize - 1);
-  //debugContext(transactionContext);
   this->transmitPacket(transactionContext);
 }
 

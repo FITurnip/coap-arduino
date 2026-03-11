@@ -66,7 +66,9 @@ void CoapRx::parseReceived(CoapMessage &msg, CoapBuffer &buffer) {
 bool CoapRx::receiveMessage() {
   CoapTransactionContext transactionContext;
   bool ok = this->_receive(transactionContext);
-  if (ok) transactionQueue.push(transactionContext);
+  if (ok) {
+    transactionQueue.push(transactionContext);
+  }
   return ok;
 }
 
