@@ -37,15 +37,9 @@ using CoapBuffer  = CoapData<DEFAULT_BUFFER_SIZE>;
 using CoapPayload = CoapData<DEFAULT_PAYLOAD_SIZE>;
 
 struct CoapTransactionContext {
-  uint8_t type = 0;
-  uint8_t code = 1;
-  uint16_t messageId = 0;
-  CoapData<8> token;
-
   CoapBuffer buffer;
-
-  IPAddress dstIp;
-  int dstPort;
+  IPAddress ipRemote;
+  int portRemote;
 };
 
 typedef struct {
@@ -54,5 +48,11 @@ typedef struct {
   uint16_t dstPort;
   uint8_t tokenLen;
 } CoapTxConfig;
+
+struct CoapRxConfig{
+  IPAddress dstIp;
+  uint16_t dstPort = 0;
+  CoapPayload payload;
+};
 
 #endif

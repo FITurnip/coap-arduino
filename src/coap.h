@@ -61,14 +61,14 @@ public:
   uint8_t optionSize = 0;
   CoapData<DEFAULT_PAYLOAD_SIZE> payload;
 
-  IPAddress dstIp;
-  int dstPort;
+  IPAddress ipRemote;
+  int portRemote;
 
   void addOption(CoapOptNum num, uint16_t len, const uint8_t *val);
   void print();
 };
 
-typedef CoapTransactionContext (*CoapHandler)(CoapMessage &msg);
+typedef CoapRxConfig (*CoapHandler)(CoapMessage &reqMsg);
 class CoapResource {
 private:
     char* path;
@@ -82,7 +82,7 @@ private:
 public:
     CoapResource(const char* p = nullptr);
     void addHandler(const char* path, uint8_t method, CoapHandler handler);
-    CoapTransactionContext handleRequest(CoapMessage& msg, CoapTransactionContext &reqContext);
+    CoapMessage handleRequest(CoapMessage& msg);
 };
 
 class CoapSocket {
@@ -105,7 +105,6 @@ class CoapTx: public CoapSocket {
     StaticList<CoapMessage, MAX_MSG_ENTRIES> msgList;
     StaticList<CoapTransactionContext, MAX_MSG_ENTRIES> waitingResponseList;
 
-    void setBuffer(CoapMessage &message, CoapBuffer &buffer);
     void transmitPacket(CoapTransactionContext &transactionContext);
     uint8_t encodeOptionField(uint16_t value, uint8_t out[3]);
     void decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg);
@@ -116,6 +115,7 @@ class CoapTx: public CoapSocket {
 
   public:
     using CoapSocket::CoapSocket;
+    void setBuffer(CoapMessage &msg, CoapBuffer &buffer);
     CoapTx& setConfig(const CoapTxConfig &cfg);
     void sendEmpty();
 

@@ -209,8 +209,8 @@ CoapTx& CoapTx::setConfig(const CoapTxConfig &cfg) {
   newMsg.token.size = cfg.tokenLen;
   for(uint8_t i = 0; i < newMsg.token.size; i++) newMsg.token.data[i] = random(0, 256);
   
-  newMsg.dstIp = cfg.dstIp;
-  newMsg.dstPort = cfg.dstPort;
+  newMsg.ipRemote = cfg.dstIp;
+  newMsg.portRemote = cfg.dstPort;
   this->decomposeUrlIntoOptions(newMsg, cfg);
 
   msgList.push(newMsg);
@@ -224,7 +224,7 @@ void CoapTx::transmitLastMsg(CoapType type, CoapMethod method, T payload, uint16
   if(msgListSize == 0) return;
   CoapMessage &msg = msgList[msgListSize - 1];
 
-  if (!msg.dstIp || !msg.dstPort) {
+  if (!msg.ipRemote || !msg.portRemote) {
     Serial.println("no ip:port");
     return;
   }
@@ -244,17 +244,13 @@ void CoapTx::transmitLastMsg(CoapType type, CoapMethod method, T payload, uint16
   }
 
   CoapTransactionContext transactionContext;
-  transactionContext.type = type;
-  transactionContext.code = method;
-  transactionContext.messageId = msg.messageId;
-  transactionContext.token = msg.token;
 
   this->setBuffer(msg, transactionContext.buffer);
   if(transactionContext.buffer.size == 0) return;
   msg.print();
 
-  transactionContext.dstIp = msg.dstIp;
-  transactionContext.dstPort = msg.dstPort,
+  transactionContext.ipRemote = msg.ipRemote;
+  transactionContext.portRemote = msg.portRemote,
 
   waitingResponseList.push(transactionContext);
   msgList.remove(msgListSize - 1);

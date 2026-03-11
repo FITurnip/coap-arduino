@@ -17,9 +17,15 @@ void Coap::addHandler(const char* path, uint8_t method, CoapHandler handler) {
 }
 
 void Coap::handleReceivedMsg() {
-  CoapMessage msg; CoapTransactionContext reqContext;
-  bool isNotEmpty = this->_rx.shiftMessage(msg, reqContext);
+  CoapMessage reqMsg, respMsg;
+  CoapTransactionContext reqContext, respContext;
+
+  bool isNotEmpty = this->_rx.shiftMessage(reqMsg, reqContext);
   if(!isNotEmpty) return;
-  CoapTransactionContext respContext = this->resource.handleRequest(msg, reqContext);
+
+  respMsg = this->resource.handleRequest(reqMsg);
+  this->_tx.setBuffer(respMsg, respContext.buffer);
+  respContext.ipRemote = respMsg.ipRemote;
+  reqContext.portRemote = respMsg.portRemote;
   this->_tx.sendResponse(respContext);
 }

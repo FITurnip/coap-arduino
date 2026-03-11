@@ -8,8 +8,7 @@ bool CoapSocket::_transmit(CoapTransactionContext &transactionContext) {
   if (WiFi.status() != WL_CONNECTED) {
     return false;
   }
-  int ok = this->_udp.beginPacket(transactionContext.dstIp, transactionContext.dstPort);
-  //Serial.printf("dstIp: %s", transactionContext.dstIp.toString());
+  int ok = this->_udp.beginPacket(transactionContext.ipRemote, transactionContext.portRemote);
   if (!ok) return false;
   this->_udp.write(transactionContext.buffer.data, transactionContext.buffer.size);
   return this->_udp.endPacket();
@@ -20,8 +19,8 @@ bool CoapSocket::_receive(CoapTransactionContext &transactionContext) {
   if (transactionContext.buffer.size < 4 || transactionContext.buffer.size > DEFAULT_BUFFER_SIZE) return false;
   this->_udp.read(transactionContext.buffer.data, transactionContext.buffer.size);
 
-  transactionContext.dstIp    = this->_udp.remoteIP();
-  transactionContext.dstPort  = this->_udp.remotePort();
+  transactionContext.ipRemote    = this->_udp.remoteIP();
+  transactionContext.portRemote  = this->_udp.remotePort();
   return true;
 }
 
@@ -155,9 +154,11 @@ void CoapMessage::print() {
   for(uint8_t i = 0; i < optionSize; i++) {
     printOption(options[i]);
   }
-  char payloadMsg[payload.size];
-  snprintf(payloadMsg, sizeof(payloadMsg), "%s", payload.data);
-  Serial.println((const char*)payloadMsg);
+  if(payload.size > 0) {
+    char payloadMsg[payload.size];
+    snprintf(payloadMsg, sizeof(payloadMsg), "%s", payload.data);
+    Serial.println((const char*)payloadMsg);
+  }
   Serial.println();
 }
 
