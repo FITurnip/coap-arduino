@@ -54,7 +54,6 @@ private:
 public:
   uint8_t  coapVersion = 1;
   CoapType  type;
-  uint8_t  tokenLen;
   uint8_t  code;
   uint16_t messageId;
   CoapData<8> token;
@@ -103,13 +102,6 @@ class CoapSocket {
 
 class CoapTx: public CoapSocket {
   private:
-    typedef struct {
-      const char* uri;
-      IPAddress dstIp;
-      uint16_t dstPort;
-      uint8_t tokenLen;
-    } CoapTxConfig;
-
     StaticList<CoapMessage, MAX_MSG_ENTRIES> msgList;
     StaticList<CoapTransactionContext, MAX_MSG_ENTRIES> waitingResponseList;
 

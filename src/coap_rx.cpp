@@ -135,8 +135,7 @@ CoapTransactionContext CoapResource::handleRequest(CoapMessage& msg, CoapTransac
   CoapTransactionContext respContext = {};
   respContext.type = (reqContext.type == COAP_CON) ? COAP_ACK : COAP_NON;
   respContext.messageId = msg.messageId;
-  respContext.tokenLen = msg.token.size;
-  memcpy(respContext.token, msg.token.data, msg.token.size);
+  respContext.token = msg.token;
   uint8_t clsCode = msg.code >> 5, detailCode = msg.code & 0x1F;
 
   if(!(clsCode == 0 && detailCode > 0 && detailCode < 4)) {

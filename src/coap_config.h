@@ -40,12 +40,19 @@ struct CoapTransactionContext {
   uint8_t type = 0;
   uint8_t code = 0;
   uint16_t messageId = 0;
-  uint8_t tokenLen = 8, token[8];
+  CoapData<8> token;
 
   CoapBuffer buffer;
 
   IPAddress dstIp;
   int dstPort;
-}; 
+};
+
+typedef struct {
+  const char* uri;
+  IPAddress dstIp;
+  uint16_t dstPort;
+  uint8_t tokenLen;
+} CoapTxConfig;
 
 #endif

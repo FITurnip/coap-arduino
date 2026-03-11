@@ -200,11 +200,12 @@ void CoapTx::decomposeUrlIntoOptions(CoapMessage &msg, const CoapTxConfig &cfg) 
 }
 
 CoapTx& CoapTx::setConfig(const CoapTxConfig &cfg) {
-  unsigned int lastMsgIdx = msgList.length() - 1;
   if(msgList.isFull()) return *this;
   if(cfg.tokenLen > 8) return *this;
+  unsigned int totalMsgList = msgList.length();
+
   CoapMessage newMsg;
-  newMsg.messageId = lastMsgIdx >= 0 ? newMsg.messageId + 1 : random(0, 65536);
+  newMsg.messageId = totalMsgList >= 0 ? newMsg.messageId + 1 : random(0, 65536);
   newMsg.token.size = cfg.tokenLen;
   for(uint8_t i = 0; i < newMsg.token.size; i++) newMsg.token.data[i] = random(0, 256);
   
@@ -216,6 +217,38 @@ CoapTx& CoapTx::setConfig(const CoapTxConfig &cfg) {
 
   return *this;
 }
+/*
+void debugContext(const CoapTransactionContext &ctx) {
+  Serial.println(F("--- CoapTransactionContext Debug ---"));
+  
+  // Print info dasar
+  Serial.printf("Type     : %u\n", ctx.type);
+  Serial.printf("Code     : %u (Class %u.%02u)\n", ctx.code, ctx.code >> 5, ctx.code & 0x1F);
+  Serial.printf("Msg ID   : %u\n", ctx.messageId);
+  Serial.printf("TokenLen : %u\n", ctx.token.size);
+  Serial.printf("Dest     : %s:%d\n", ctx.dstIp.toString().c_str(), ctx.dstPort);
+
+  // Print Token dalam format Hex (karena token itu biner)
+  Serial.print(F("Token    : "));
+  for (int i = 0; i < ctx.token.size; i++) {
+    Serial.printf("%02X ", ctx.token.data[i]);
+  }
+  Serial.println();
+
+  // Print info Buffer
+  Serial.printf("Buf Size : %u bytes\n", ctx.buffer.size);
+  
+  // Jika ingin intip isi payload/buffer (opsional)
+  if (ctx.buffer.size > 0) {
+    Serial.print(F("Payload  : "));
+    for (int i = 0; i < (ctx.buffer.size > 16 ? 16 : ctx.buffer.size); i++) { // Limit 16 byte biar gak menuhin layar
+       Serial.printf("%02X ", ctx.buffer.data[i]);
+    }
+    if (ctx.buffer.size > 16) Serial.print("...");
+    Serial.println();
+  }
+  Serial.println(F("-----------------------------------"));
+}*/
 
 template <typename T>
 void CoapTx::transmitLastMsg(CoapType type, CoapMethod method, T payload, uint16_t payloadLen) {
@@ -243,20 +276,21 @@ void CoapTx::transmitLastMsg(CoapType type, CoapMethod method, T payload, uint16
   }
 
   CoapTransactionContext transactionContext;
+  transactionContext.type = type;
+  transactionContext.code = method;
+  transactionContext.messageId = msg.messageId;
+  transactionContext.token = msg.token;
+
+  this->setBuffer(msg, transactionContext.buffer);
+  if(transactionContext.buffer.size == 0) return;
+  msg.print();
+
   transactionContext.dstIp = msg.dstIp;
   transactionContext.dstPort = msg.dstPort,
-  //transactionContext.ConMetadata.isAck = type,
-  transactionContext.messageId = msg.messageId,
-  transactionContext.tokenLen = msg.tokenLen;
-  memcpy(transactionContext.token, msg.token.data, msg.token.size);
-
-  CoapBuffer &buffer = transactionContext.buffer;
-  this->setBuffer(msg, buffer);
-  if(buffer.size == 0) return;
-  msg.print();
 
   waitingResponseList.push(transactionContext);
   msgList.remove(msgListSize - 1);
+  //debugContext(transactionContext);
   this->transmitPacket(transactionContext);
 }
 

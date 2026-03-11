@@ -139,7 +139,7 @@ void CoapMessage::printOption(const CoapOpt &opt) {
 
 void CoapMessage::print() {
   uint32_t token32 = 0;
-  for(uint8_t i = 0; i < tokenLen; i++) token32 = (token32 << 8) | token.data[i];
+  for(uint8_t i = 0; i < token.size; i++) token32 = (token32 << 8) | token.data[i];
   String msgType[4] = {"CON", "NON", "ACK", "RST"};
 
   uint8_t clsCode = code >> 5, detailCode = code & 0x1F;
@@ -154,6 +154,9 @@ void CoapMessage::print() {
   for(uint8_t i = 0; i < optionSize; i++) {
     printOption(options[i]);
   }
-  Serial.println((const char*)payload.data);
+  char payloadMsg[payload.size];
+  snprintf(payloadMsg, sizeof(payloadMsg), "%s", payload.data);
+  Serial.println((const char*)payloadMsg);
+  Serial.println();
 }
 
