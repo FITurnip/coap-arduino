@@ -9,6 +9,7 @@ bool CoapSocket::_transmit(CoapTransactionContext &transactionContext) {
     return false;
   }
   int ok = this->_udp.beginPacket(transactionContext.dstIp, transactionContext.dstPort);
+  //Serial.printf("dstIp: %s", transactionContext.dstIp.toString());
   if (!ok) return false;
   this->_udp.write(transactionContext.buffer.data, transactionContext.buffer.size);
   return this->_udp.endPacket();
@@ -20,6 +21,7 @@ bool CoapSocket::_receive(CoapTransactionContext &transactionContext) {
   this->_udp.read(transactionContext.buffer.data, transactionContext.buffer.size);
 
   transactionContext.dstIp    = this->_udp.remoteIP();
+  //Serial.printf("dstIp receive: %s", transactionContext.dstIp.toString());
   transactionContext.dstPort  = this->_udp.remotePort();
   return true;
 }

@@ -21,5 +21,5 @@ void Coap::handleReceivedMsg() {
   bool isNotEmpty = this->_rx.shiftMessage(msg, reqContext);
   if(!isNotEmpty) return;
   CoapTransactionContext respContext = this->resource.handleRequest(msg, reqContext);
-  this->_tx.sendResponse(respContext);
+  //this->_tx.sendResponse(respContext);
 }
